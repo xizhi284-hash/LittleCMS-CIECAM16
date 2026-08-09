@@ -4,6 +4,7 @@ function(_lcms2_collect_sources out_var)
   set(_src
     "${PROJECT_SOURCE_DIR}/src/cmsalpha.c"
     "${PROJECT_SOURCE_DIR}/src/cmscam02.c"
+    "${PROJECT_SOURCE_DIR}/src/cmscam16.c"
     "${PROJECT_SOURCE_DIR}/src/cmscgats.c"
     "${PROJECT_SOURCE_DIR}/src/cmscnvrt.c"
     "${PROJECT_SOURCE_DIR}/src/cmserr.c"

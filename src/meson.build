@@ -1,6 +1,7 @@
 lcms2_srcs = files(
   'cmsalpha.c',
   'cmscam02.c',
+  'cmscam16.c',
   'cmscgats.c',
   'cmscnvrt.c',
   'cmserr.c',

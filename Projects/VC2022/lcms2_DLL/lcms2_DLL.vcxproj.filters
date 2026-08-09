@@ -18,6 +18,9 @@
     <ClCompile Include="..\..\..\src\cmscam02.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\cmscam16.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\cmscgats.c">
       <Filter>Source Files</Filter>
     </ClCompile>
