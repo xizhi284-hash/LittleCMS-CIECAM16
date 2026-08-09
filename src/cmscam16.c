@@ -83,10 +83,10 @@ cmsFloat64Number computeFL(cmsCIECAM16* pMod)
 {
     cmsFloat64Number k, FL;
 
-    k = 1.0 / ((5.0 * pMod->LA) + 1.0);
-    FL = 0.2 * pow(k, 4.0) * (5.0 * pMod->LA) + 0.1 *
+    k = 1.0 / ((5.0 * pMod -> LA) + 1.0);
+    FL = 0.2 * pow(k, 4.0) * (5.0 * pMod -> LA) + 0.1 *
         (pow((1.0 - pow(k, 4.0)), 2.0)) *
-        (pow((5.0 * pMod->LA), (1.0 / 3.0)));
+        (pow((5.0 * pMod -> LA), (1.0 / 3.0)));
 
     return FL;
 }
@@ -96,13 +96,17 @@ cmsFloat64Number computeD(cmsCIECAM16* pMod)
 {
     cmsFloat64Number D, temp;
 
-    temp = 1.0 - ((1.0 / 3.6) * exp((-pMod->LA - 42) / 92.0));
+    temp = 1.0 - ((1.0 / 3.6) * exp((-pMod -> LA - 42) / 92.0));
 
-    D = pMod->F * temp;
+    D = pMod -> F * temp;
 
     // CIE 248:2022 Annex A, step 2: D is constrained to the range [0, 1]
-    if (D > 1.0) D = 1.0;
-    if (D < 0.0) D = 0.0;
+    if (D > 1.0) {
+        D = 1.0;
+    }
+    if (D < 0.0) {
+        D = 0.0;
+    }
 
     return D;
 }
@@ -124,7 +128,7 @@ void computeD_RGB(cmsCIECAM16* pMod)
     cmsUInt32Number i;
 
     for (i = 0; i < 3; i++) {
-        pMod->D_RGB[i] = (pMod->D * 100.0 / pMod->adoptedWhite.RGB[i]) + 1.0 - pMod->D;
+        pMod -> D_RGB[i] = (pMod -> D * 100.0 / pMod -> adoptedWhite.RGB[i]) + 1.0 - pMod -> D;
     }
 }
 
@@ -134,7 +138,7 @@ CAM16COLOR ChromaticAdaptation(CAM16COLOR clr, cmsCIECAM16* pMod)
     cmsUInt32Number i;
 
     for (i = 0; i < 3; i++) {
-        clr.RGBc[i] = pMod->D_RGB[i] * clr.RGB[i];
+        clr.RGBc[i] = pMod -> D_RGB[i] * clr.RGB[i];
     }
 
     return clr;
@@ -146,7 +150,7 @@ cmsFloat64Number f_q(cmsCIECAM16* pMod, cmsFloat64Number q)
 {
     cmsFloat64Number temp;
 
-    temp = pow(pMod->FL * q / 100.0, 0.42);
+    temp = pow(pMod -> FL * q / 100.0, 0.42);
 
     return (400.0 * temp) / (temp + 27.13);
 }
@@ -157,9 +161,9 @@ cmsFloat64Number df_q(cmsCIECAM16* pMod, cmsFloat64Number q)
 {
     cmsFloat64Number x;
 
-    x = pMod->FL * q / 100.0;
+    x = pMod -> FL * q / 100.0;
 
-    return (1.68 * 27.13 * pMod->FL * pow(x, -0.58)) /
+    return (1.68 * 27.13 * pMod -> FL * pow(x, -0.58)) /
         pow(27.13 + pow(x, 0.42), 2.0);
 }
 
@@ -174,7 +178,7 @@ CAM16COLOR WhiteNonlinearCompression(CAM16COLOR clr, cmsCIECAM16* pMod)
     }
 
     clr.A = (((2.0 * clr.RGBa[0]) + clr.RGBa[1] +
-        (clr.RGBa[2] / 20.0)) - 0.305) * pMod->Nbb;
+        (clr.RGBa[2] / 20.0)) - 0.305) * pMod -> Nbb;
 
     return clr;
 }
@@ -191,16 +195,16 @@ CAM16COLOR NonlinearCompression(CAM16COLOR clr, cmsCIECAM16* pMod)
 
         q = clr.RGBc[i];
 
-        if (q > pMod->qU)
-            clr.RGBa[i] = pMod->f_qU + pMod->df_qU * (q - pMod->qU) + 0.1;
+        if (q > pMod -> qU)
+            clr.RGBa[i] = pMod -> f_qU + pMod -> df_qU * (q - pMod -> qU) + 0.1;
         else if (q >= 0.26)
             clr.RGBa[i] = f_q(pMod, q) + 0.1;
         else
-            clr.RGBa[i] = pMod->f_qL * q / 0.26 + 0.1;
+            clr.RGBa[i] = pMod -> f_qL * q / 0.26 + 0.1;
     }
 
     clr.A = (((2.0 * clr.RGBa[0]) + clr.RGBa[1] +
-        (clr.RGBa[2] / 20.0)) - 0.305) * pMod->Nbb;
+        (clr.RGBa[2] / 20.0)) - 0.305) * pMod -> Nbb;
 
     return clr;
 }
@@ -218,7 +222,7 @@ CAM16COLOR ComputeCorrelates(CAM16COLOR clr, cmsCIECAM16* pMod)
     if (clr.h < 0.0) clr.h += 360.0;
 
     d2r = (3.141592654 / 180.0);
-    e = ((12500.0 / 13.0) * pMod->Nc * pMod->Ncb) *
+    e = ((12500.0 / 13.0) * pMod -> Nc * pMod -> Ncb) *
         (cos((clr.h * d2r + 2.0)) + 3.8);
 
     // Hue quadrature H from the unique hue data (Eq. 5.26, Table 3)
@@ -243,20 +247,20 @@ CAM16COLOR ComputeCorrelates(CAM16COLOR clr, cmsCIECAM16* pMod)
         clr.H = 300 + ((100*((clr.h - 237.53)/1.2)) / temp);
     }
 
-    clr.J = 100.0 * pow((clr.A / pMod->adoptedWhite.A),
-        (pMod->c * pMod->z));
+    clr.J = 100.0 * pow((clr.A / pMod -> adoptedWhite.A),
+        (pMod -> c * pMod -> z));
 
-    clr.Q = (4.0 / pMod->c) * pow((clr.J / 100.0), 0.5) *
-        (pMod->adoptedWhite.A + 4.0) * pow(pMod->FL, 0.25);
+    clr.Q = (4.0 / pMod -> c) * pow((clr.J / 100.0), 0.5) *
+        (pMod -> adoptedWhite.A + 4.0) * pow(pMod -> FL, 0.25);
 
     t = (e * pow(((a * a) + (b * b)), 0.5)) /
         (clr.RGBa[0] + clr.RGBa[1] +
         ((21.0 / 20.0) * clr.RGBa[2]));
 
     clr.C = pow(t, 0.9) * pow((clr.J / 100.0), 0.5) *
-        pow((1.64 - pow(0.29, pMod->n)), 0.73);
+        pow((1.64 - pow(0.29, pMod -> n)), 0.73);
 
-    clr.M = clr.C * pow(pMod->FL, 0.25);
+    clr.M = clr.C * pow(pMod -> FL, 0.25);
 
     if (clr.Q > 0.0)
         clr.s = 100.0 * pow((clr.M / clr.Q), 0.5);
@@ -275,16 +279,16 @@ CAM16COLOR InverseCorrelates(CAM16COLOR clr, cmsCIECAM16* pMod)
     d2r = 3.141592654 / 180.0;
 
     t = pow( (clr.C / (pow((clr.J / 100.0), 0.5) *
-        (pow((1.64 - pow(0.29, pMod->n)), 0.73)))),
+        (pow((1.64 - pow(0.29, pMod -> n)), 0.73)))),
         (1.0 / 0.9) );
-    e = ((12500.0 / 13.0) * pMod->Nc * pMod->Ncb) *
+    e = ((12500.0 / 13.0) * pMod -> Nc * pMod -> Ncb) *
         (cos((clr.h * d2r + 2.0)) + 3.8);
 
-    clr.A = pMod->adoptedWhite.A * pow(
+    clr.A = pMod -> adoptedWhite.A * pow(
            (clr.J / 100.0),
-           (1.0 / (pMod->c * pMod->z)));
+           (1.0 / (pMod -> c * pMod -> z)));
 
-    p2 = (clr.A / pMod->Nbb) + 0.305;
+    p2 = (clr.A / pMod -> Nbb) + 0.305;
 
     if ( t <= 0.0 ) {     // special case from spec notes, avoid divide by zero
         clr.a = clr.b = 0.0;
@@ -336,13 +340,13 @@ CAM16COLOR InverseNonlinearity(CAM16COLOR clr, cmsCIECAM16* pMod)
 
         v = clr.RGBa[i] - 0.1;
 
-        if (v > pMod->f_qU)
-            clr.RGBc[i] = pMod->qU + (v - pMod->f_qU) / pMod->df_qU;
-        else if (v >= pMod->f_qL)
-            clr.RGBc[i] = (100.0 / pMod->FL) *
+        if (v > pMod -> f_qU)
+            clr.RGBc[i] = pMod -> qU + (v - pMod -> f_qU) / pMod -> df_qU;
+        else if (v >= pMod -> f_qL)
+            clr.RGBc[i] = (100.0 / pMod -> FL) *
                 pow((27.13 * v) / (400.0 - v), (1.0 / 0.42));
         else
-            clr.RGBc[i] = 0.26 * v / pMod->f_qL;
+            clr.RGBc[i] = 0.26 * v / pMod -> f_qL;
     }
 
     return clr;
@@ -354,7 +358,7 @@ CAM16COLOR InverseChromaticAdaptation(CAM16COLOR clr, cmsCIECAM16* pMod)
     cmsUInt32Number i;
 
     for (i = 0; i < 3; i++) {
-        clr.RGB[i] = clr.RGBc[i] / pMod->D_RGB[i];
+        clr.RGB[i] = clr.RGBc[i] / pMod -> D_RGB[i];
     }
 
     return clr;
@@ -381,31 +385,31 @@ cmsHANDLE  CMSEXPORT cmsCIECAM16Init(cmsContext ContextID, const cmsViewingCondi
 
     // Yb == 0 is an error condition (CIE 248:2022, Clause 4):
     // the model does not apply to unrelated colours
-    if (pVC->Yb <= 0.0) return NULL;
+    if (pVC -> Yb <= 0.0) return NULL;
 
     if((lpMod = (cmsCIECAM16*) _cmsMallocZero(ContextID, sizeof(cmsCIECAM16))) == NULL) {
         return NULL;
     }
 
-    lpMod ->ContextID = ContextID;
+    lpMod -> ContextID = ContextID;
 
-    lpMod ->adoptedWhite.XYZ[0] = pVC ->whitePoint.X;
-    lpMod ->adoptedWhite.XYZ[1] = pVC ->whitePoint.Y;
-    lpMod ->adoptedWhite.XYZ[2] = pVC ->whitePoint.Z;
+    lpMod -> adoptedWhite.XYZ[0] = pVC -> whitePoint.X;
+    lpMod -> adoptedWhite.XYZ[1] = pVC -> whitePoint.Y;
+    lpMod -> adoptedWhite.XYZ[2] = pVC -> whitePoint.Z;
 
-    lpMod -> LA       = pVC ->La;
-    lpMod -> Yb       = pVC ->Yb;
-    lpMod -> D        = pVC ->D_value;
-    lpMod -> surround = pVC ->surround;
+    lpMod -> LA       = pVC -> La;
+    lpMod -> Yb       = pVC -> Yb;
+    lpMod -> D        = pVC -> D_value;
+    lpMod -> surround = pVC -> surround;
 
     switch (lpMod -> surround) {
 
 
     case CUTSHEET_SURROUND:
         // lcms extension, not defined by CIE 248:2022
-        lpMod->F = 0.8;
-        lpMod->c = 0.41;
-        lpMod->Nc = 0.8;
+        lpMod -> F = 0.8;
+        lpMod -> c = 0.41;
+        lpMod -> Nc = 0.8;
         break;
 
     case DARK_SURROUND:
@@ -463,7 +467,7 @@ void CMSEXPORT cmsCIECAM16Done(cmsHANDLE hModel)
 {
     cmsCIECAM16* lpMod = (cmsCIECAM16*) hModel;
 
-    if (lpMod) _cmsFree(lpMod ->ContextID, lpMod);
+    if (lpMod) _cmsFree(lpMod -> ContextID, lpMod);
 }
 
 
@@ -478,22 +482,22 @@ void CMSEXPORT cmsCIECAM16ForwardEx(cmsHANDLE hModel, const cmsCIEXYZ* pIn, cmsC
 
     memset(&clr, 0, sizeof(clr));
 
-    clr.XYZ[0] = pIn ->X;
-    clr.XYZ[1] = pIn ->Y;
-    clr.XYZ[2] = pIn ->Z;
+    clr.XYZ[0] = pIn -> X;
+    clr.XYZ[1] = pIn -> Y;
+    clr.XYZ[2] = pIn -> Z;
 
     clr = XYZtoCAT16(clr);
     clr = ChromaticAdaptation(clr, lpMod);
     clr = NonlinearCompression(clr, lpMod);
     clr = ComputeCorrelates(clr, lpMod);
 
-    pOut ->J = clr.J;
-    pOut ->C = clr.C;
-    pOut ->h = clr.h;
-    pOut ->Q = clr.Q;
-    pOut ->M = clr.M;
-    pOut ->s = clr.s;
-    pOut ->H = clr.H;
+    pOut -> J = clr.J;
+    pOut -> C = clr.C;
+    pOut -> h = clr.h;
+    pOut -> Q = clr.Q;
+    pOut -> M = clr.M;
+    pOut -> s = clr.s;
+    pOut -> H = clr.H;
 }
 
 
@@ -505,9 +509,9 @@ void CMSEXPORT cmsCIECAM16Forward(cmsHANDLE hModel, const cmsCIEXYZ* pIn, cmsJCh
 
     cmsCIECAM16ForwardEx(hModel, pIn, &appearance);
 
-    pOut ->J = appearance.J;
-    pOut ->C = appearance.C;
-    pOut ->h = appearance.h;
+    pOut -> J = appearance.J;
+    pOut -> C = appearance.C;
+    pOut -> h = appearance.h;
 }
 
 
@@ -530,7 +534,7 @@ void CMSEXPORT cmsCIECAM16ReverseEx(cmsHANDLE hModel, const cmsCIECAM16Appearanc
 
     if (clr.J <= 0.0) {
         // Achromatic black, avoid divisions by zero down the pipeline
-        pOut ->X = pOut ->Y = pOut ->Z = 0.0;
+        pOut -> X = pOut -> Y = pOut -> Z = 0.0;
         return;
     }
 
@@ -539,9 +543,9 @@ void CMSEXPORT cmsCIECAM16ReverseEx(cmsHANDLE hModel, const cmsCIECAM16Appearanc
     clr = InverseChromaticAdaptation(clr, lpMod);
     clr = CAT16toXYZ(clr);
 
-    pOut ->X = clr.XYZ[0];
-    pOut ->Y = clr.XYZ[1];
-    pOut ->Z = clr.XYZ[2];
+    pOut -> X = clr.XYZ[0];
+    pOut -> Y = clr.XYZ[1];
+    pOut -> Z = clr.XYZ[2];
 }
 
 
@@ -553,9 +557,9 @@ void CMSEXPORT cmsCIECAM16Reverse(cmsHANDLE hModel, const cmsJCh* pIn, cmsCIEXYZ
 
     memset(&appearance, 0, sizeof(appearance));
 
-    appearance.J = pIn ->J;
-    appearance.C = pIn ->C;
-    appearance.h = pIn ->h;
+    appearance.J = pIn -> J;
+    appearance.C = pIn -> C;
+    appearance.h = pIn -> h;
 
     cmsCIECAM16ReverseEx(hModel, &appearance, pOut);
 }
@@ -600,15 +604,15 @@ cmsBool CMSEXPORT cmsCAT16(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc,
     memset(&whiteSrc, 0, sizeof(whiteSrc));
     memset(&whiteDst, 0, sizeof(whiteDst));
 
-    clr.XYZ[0]      = pIn ->X;
-    clr.XYZ[1]      = pIn ->Y;
-    clr.XYZ[2]      = pIn ->Z;
-    whiteSrc.XYZ[0] = pWhiteSrc ->X;
-    whiteSrc.XYZ[1] = pWhiteSrc ->Y;
-    whiteSrc.XYZ[2] = pWhiteSrc ->Z;
-    whiteDst.XYZ[0] = pWhiteDst ->X;
-    whiteDst.XYZ[1] = pWhiteDst ->Y;
-    whiteDst.XYZ[2] = pWhiteDst ->Z;
+    clr.XYZ[0]      = pIn -> X;
+    clr.XYZ[1]      = pIn -> Y;
+    clr.XYZ[2]      = pIn -> Z;
+    whiteSrc.XYZ[0] = pWhiteSrc -> X;
+    whiteSrc.XYZ[1] = pWhiteSrc -> Y;
+    whiteSrc.XYZ[2] = pWhiteSrc -> Z;
+    whiteDst.XYZ[0] = pWhiteDst -> X;
+    whiteDst.XYZ[1] = pWhiteDst -> Y;
+    whiteDst.XYZ[2] = pWhiteDst -> Z;
 
     // Annex A, step 1
     clr      = XYZtoCAT16(clr);
@@ -619,8 +623,18 @@ cmsBool CMSEXPORT cmsCAT16(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc,
     Dsrc = F * (1.0 - ((1.0 / 3.6) * exp((-LaSrc - 42.0) / 92.0)));
     Ddst = F * (1.0 - ((1.0 / 3.6) * exp((-LaDst - 42.0) / 92.0)));
 
-    if (Dsrc > 1.0) Dsrc = 1.0; else if (Dsrc < 0.0) Dsrc = 0.0;
-    if (Ddst > 1.0) Ddst = 1.0; else if (Ddst < 0.0) Ddst = 0.0;
+    if (Dsrc > 1.0) {
+        Dsrc = 1.0;
+    }
+    else if (Dsrc < 0.0) {
+        Dsrc = 0.0;
+    }
+    if (Ddst > 1.0) {
+        Ddst = 1.0;
+    }
+    else if (Ddst < 0.0) {
+        Ddst = 0.0;
+    }
 
     // Annex A, steps 3 and 4 (Eqs. A.5 - A.14)
     for (i = 0; i < 3; i++) {
@@ -635,9 +649,9 @@ cmsBool CMSEXPORT cmsCAT16(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc,
     clr.RGB[2] = clr.RGBc[2];
     clr = CAT16toXYZ(clr);
 
-    pOut ->X = clr.XYZ[0];
-    pOut ->Y = clr.XYZ[1];
-    pOut ->Z = clr.XYZ[2];
+    pOut -> X = clr.XYZ[0];
+    pOut -> Y = clr.XYZ[1];
+    pOut -> Z = clr.XYZ[2];
 
     return TRUE;
 }
