@@ -1215,7 +1215,8 @@ typedef struct {
     cmsCIEXYZ        whitePoint;
     cmsFloat64Number Yb;
     cmsFloat64Number La;
-    cmsUInt32Number  surround;
+    cmsUInt32Number  surround;      // Any value other than AVG/DIM/DARK/CUTSHEET_SURROUND
+                                    // silently defaults to Average surround
     cmsFloat64Number D_value;
 
     } cmsViewingConditions;
@@ -1224,6 +1225,42 @@ CMSAPI cmsHANDLE         CMSEXPORT cmsCIECAM02Init(cmsContext ContextID, const c
 CMSAPI void              CMSEXPORT cmsCIECAM02Done(cmsHANDLE hModel);
 CMSAPI void              CMSEXPORT cmsCIECAM02Forward(cmsHANDLE hModel, const cmsCIEXYZ* pIn, cmsJCh* pOut);
 CMSAPI void              CMSEXPORT cmsCIECAM02Reverse(cmsHANDLE hModel, const cmsJCh* pIn,    cmsCIEXYZ* pOut);
+
+
+// CIECAM16 ---------------------------------------------------------------------------------------------------
+
+// Appearance correlates of the CIECAM16 model (CIE 248:2022), as returned by cmsCIECAM16ForwardEx.
+// h is the hue angle in degrees (0..360), H is the hue quadrature (0..400). cmsCIECAM16ReverseEx
+// only uses J, C and h; the remaining fields are ignored.
+
+typedef struct {
+    cmsFloat64Number J;        // Lightness
+    cmsFloat64Number C;        // Chroma
+    cmsFloat64Number h;        // Hue angle, degrees
+    cmsFloat64Number Q;        // Brightness
+    cmsFloat64Number M;        // Colourfulness
+    cmsFloat64Number s;        // Saturation
+    cmsFloat64Number H;        // Hue quadrature
+
+    } cmsCIECAM16Appearance;
+
+// Yb, La and whitePoint.Y must all be > 0, otherwise cmsCIECAM16Init fails and returns NULL.
+CMSAPI cmsHANDLE         CMSEXPORT cmsCIECAM16Init(cmsContext ContextID, const cmsViewingConditions* pVC);
+CMSAPI void              CMSEXPORT cmsCIECAM16Done(cmsHANDLE hModel);
+CMSAPI void              CMSEXPORT cmsCIECAM16Forward(cmsHANDLE hModel, const cmsCIEXYZ* pIn, cmsJCh* pOut);
+CMSAPI void              CMSEXPORT cmsCIECAM16Reverse(cmsHANDLE hModel, const cmsJCh* pIn,    cmsCIEXYZ* pOut);
+CMSAPI void              CMSEXPORT cmsCIECAM16ForwardEx(cmsHANDLE hModel, const cmsCIEXYZ* pIn, cmsCIECAM16Appearance* pOut);
+CMSAPI void              CMSEXPORT cmsCIECAM16ReverseEx(cmsHANDLE hModel, const cmsCIECAM16Appearance* pIn, cmsCIEXYZ* pOut);
+
+// Two-step CAT16 chromatic adaptation transform (CIE 248:2022, Annex A).
+// Note: a single surround applies to both source and destination (F is the
+// same at both ends); the general Annex A case with different surrounds
+// is not exposed by this API.
+// Returns FALSE if either white point is degenerate (near-zero CAT16 response).
+CMSAPI cmsBool           CMSEXPORT cmsCAT16(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc,
+                                                                            const cmsCIEXYZ* pWhiteDst, cmsFloat64Number LaDst,
+                                                                            cmsUInt32Number surround,
+                                                                            const cmsCIEXYZ* pIn, cmsCIEXYZ* pOut);
 
 
 // Tone curves -----------------------------------------------------------------------------------------

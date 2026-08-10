@@ -8936,6 +8936,269 @@ int CheckMixedRawAndCooked(void)
     return is_ok;
 }
 
+// -----------------------------------------------------------------------------------
+// CIECAM16 colour appearance model (CIE 248:2022)
+
+static
+cmsInt32Number CheckCIECAM16Forward(void)
+{
+    cmsViewingConditions vc;
+    cmsHANDLE hMod;
+    cmsCIEXYZ XYZ;
+    cmsJCh JCh;
+    cmsCIECAM16Appearance appearance;
+    cmsInt32Number rc = 1;
+
+    // Worked example of CIE 248:2022, Clause 7 (Table 4)
+    vc.whitePoint.X = 96.46;
+    vc.whitePoint.Y = 100.00;
+    vc.whitePoint.Z = 108.62;
+    vc.Yb = 16.0;
+    vc.La = 40.0;
+    vc.surround = AVG_SURROUND;
+    vc.D_value = D_CALCULATE;
+
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) return 0;
+
+    XYZ.X = 60.70;
+    XYZ.Y = 49.60;
+    XYZ.Z = 10.29;
+
+    cmsCIECAM16Forward(hMod, &XYZ, &JCh);
+
+    if (!IsGoodVal("J", 70.4406, JCh.J, 0.001)) rc = 0;
+    if (!IsGoodVal("C", 58.6035, JCh.C, 0.001)) rc = 0;
+    if (!IsGoodVal("h", 57.9145, JCh.h, 0.001)) rc = 0;
+
+    cmsCIECAM16ForwardEx(hMod, &XYZ, &appearance);
+
+    if (!IsGoodVal("Q", 172.1555, appearance.Q, 0.001)) rc = 0;
+    if (!IsGoodVal("M", 51.2479, appearance.M, 0.001)) rc = 0;
+    if (!IsGoodVal("s", 54.5604, appearance.s, 0.001)) rc = 0;
+    if (!IsGoodVal("H", 50.7425, appearance.H, 0.001)) rc = 0;
+
+    cmsCIECAM16Done(hMod);
+
+    return rc;
+}
+
+static
+cmsInt32Number CheckCIECAM16Reverse(void)
+{
+    cmsViewingConditions vc;
+    cmsHANDLE hMod;
+    cmsCIEXYZ XYZ;
+    cmsJCh JCh;
+    cmsCIECAM16Appearance appearance;
+    cmsInt32Number rc = 1;
+
+    // Worked example of CIE 248:2022, Clause 7 (Tables 6 and 7).
+    // The spec feeds hue quadrature H = 50.74 into the reverse model,
+    // which corresponds to hue angle h = 57.9128 (Table 7); the lcms
+    // API takes the hue angle directly.
+    vc.whitePoint.X = 96.46;
+    vc.whitePoint.Y = 100.00;
+    vc.whitePoint.Z = 108.62;
+    vc.Yb = 16.0;
+    vc.La = 40.0;
+    vc.surround = AVG_SURROUND;
+    vc.D_value = D_CALCULATE;
+
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) return 0;
+
+    JCh.J = 70.4400;
+    JCh.C = 58.6000;
+    JCh.h = 57.9128;
+
+    cmsCIECAM16Reverse(hMod, &JCh, &XYZ);
+
+    if (!IsGoodVal("X", 60.6988, XYZ.X, 0.001)) rc = 0;
+    if (!IsGoodVal("Y", 49.5993, XYZ.Y, 0.001)) rc = 0;
+    if (!IsGoodVal("Z", 10.2917, XYZ.Z, 0.001)) rc = 0;
+
+    memset(&appearance, 0, sizeof(appearance));
+    appearance.J = JCh.J;
+    appearance.C = JCh.C;
+    appearance.h = JCh.h;
+
+    cmsCIECAM16ReverseEx(hMod, &appearance, &XYZ);
+
+    if (!IsGoodVal("X (Ex)", 60.6988, XYZ.X, 0.001)) rc = 0;
+    if (!IsGoodVal("Y (Ex)", 49.5993, XYZ.Y, 0.001)) rc = 0;
+    if (!IsGoodVal("Z (Ex)", 10.2917, XYZ.Z, 0.001)) rc = 0;
+
+    cmsCIECAM16Done(hMod);
+
+    return rc;
+}
+
+static
+cmsInt32Number CheckCIECAM16Roundtrip(void)
+{
+    // Very dark colours take the linear extension below qL, values far
+    // above the white take the tangent extension above qU
+    static const cmsFloat64Number Colors[][3] = {
+        {  60.70,  49.60,  10.29 },
+        {  19.01,  20.00,  21.78 },
+        {  95.05, 100.00, 108.88 },
+        {   0.20,   0.10,   0.30 },
+        { 200.00, 180.00, 150.00 }
+    };
+    static const cmsUInt32Number Surrounds[] = { AVG_SURROUND, DIM_SURROUND, DARK_SURROUND };
+
+    cmsViewingConditions vc;
+    cmsHANDLE hMod;
+    cmsCIEXYZ XYZ, XYZ2;
+    cmsJCh JCh;
+    cmsUInt32Number i, s;
+    cmsInt32Number rc = 1;
+
+    for (s = 0; s < 3; s++) {
+
+        vc.whitePoint.X = 96.46;
+        vc.whitePoint.Y = 100.00;
+        vc.whitePoint.Z = 108.62;
+        vc.Yb = 16.0;
+        vc.La = 40.0;
+        vc.surround = Surrounds[s];
+        vc.D_value = D_CALCULATE;
+
+        hMod = cmsCIECAM16Init(NULL, &vc);
+        if (hMod == NULL) return 0;
+
+        for (i = 0; i < 5; i++) {
+
+            XYZ.X = Colors[i][0];
+            XYZ.Y = Colors[i][1];
+            XYZ.Z = Colors[i][2];
+
+            cmsCIECAM16Forward(hMod, &XYZ, &JCh);
+            cmsCIECAM16Reverse(hMod, &JCh, &XYZ2);
+
+            if (!IsGoodVal("X roundtrip", XYZ.X, XYZ2.X, 1e-6)) rc = 0;
+            if (!IsGoodVal("Y roundtrip", XYZ.Y, XYZ2.Y, 1e-6)) rc = 0;
+            if (!IsGoodVal("Z roundtrip", XYZ.Z, XYZ2.Z, 1e-6)) rc = 0;
+        }
+
+        cmsCIECAM16Done(hMod);
+    }
+
+    return rc;
+}
+
+static
+cmsInt32Number CheckCAT16TwoStep(void)
+{
+    cmsCIEXYZ whiteSrc, whiteDst, in, out;
+    cmsInt32Number rc = 1;
+
+    // Worked example of CIE 248:2022, Annex A (Table A.1)
+    whiteSrc.X = 109.850;
+    whiteSrc.Y = 100.0;
+    whiteSrc.Z =  35.585;
+
+    whiteDst.X =  95.047;
+    whiteDst.Y = 100.0;
+    whiteDst.Z = 108.883;
+
+    in.X = 48.900;
+    in.Y = 43.620;
+    in.Z =  6.250;
+
+    if (!cmsCAT16(&whiteSrc, 100.0, &whiteDst, 200.0, AVG_SURROUND, &in, &out)) return 0;
+
+    if (!IsGoodVal("X", 40.3743, out.X, 0.001)) rc = 0;
+    if (!IsGoodVal("Y", 43.6943, out.Y, 0.001)) rc = 0;
+    if (!IsGoodVal("Z", 20.5167, out.Z, 0.001)) rc = 0;
+
+    // Degenerate white points must be rejected (they would divide by
+    // ~zero in CAT16 space). These signal an error, silence the logger
+    cmsSetLogErrorHandler(NULL);
+
+    whiteSrc.X = whiteSrc.Y = whiteSrc.Z = 0.0;
+    if (cmsCAT16(&whiteSrc, 100.0, &whiteDst, 200.0, AVG_SURROUND, &in, &out)) {
+        Fail("CAT16 with zero source white not rejected");
+        rc = 0;
+    }
+
+    ResetFatalError();
+
+    return rc;
+}
+
+static
+cmsInt32Number CheckCIECAM16InputValidation(void)
+{
+    cmsViewingConditions vc;
+    cmsHANDLE hMod;
+    cmsCIEXYZ XYZ;
+    cmsJCh JCh;
+    cmsInt32Number rc = 1;
+
+    vc.whitePoint.X = 96.46;
+    vc.whitePoint.Y = 100.00;
+    vc.whitePoint.Z = 108.62;
+    vc.Yb = 16.0;
+    vc.La = 40.0;
+    vc.surround = AVG_SURROUND;
+    vc.D_value = D_CALCULATE;
+
+    // Out-of-domain viewing conditions must be rejected. These calls
+    // signal errors on purpose, so silence the logger meanwhile
+    cmsSetLogErrorHandler(NULL);
+
+    vc.Yb = 0.0;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yb = 0 not rejected"); rc = 0; }
+    vc.Yb = -5.0;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yb < 0 not rejected"); rc = 0; }
+    vc.Yb = 16.0;
+
+    vc.whitePoint.Y = 0.0;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yw = 0 not rejected"); rc = 0; }
+    vc.whitePoint.Y = -1.0;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yw < 0 not rejected"); rc = 0; }
+    vc.whitePoint.Y = 100.0;
+
+    vc.La = 0.0;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("La = 0 not rejected"); rc = 0; }
+    vc.La = -5.0;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("La < 0 not rejected"); rc = 0; }
+    vc.La = 40.0;
+
+    ResetFatalError();
+
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) return 0;
+
+    // Pure black: all correlates must be exactly zero
+    XYZ.X = XYZ.Y = XYZ.Z = 0.0;
+    cmsCIECAM16Forward(hMod, &XYZ, &JCh);
+
+    if (!IsGoodVal("J (black)", 0.0, JCh.J, 0.0)) rc = 0;
+    if (!IsGoodVal("C (black)", 0.0, JCh.C, 0.0)) rc = 0;
+    if (!IsGoodVal("h (black)", 0.0, JCh.h, 0.0)) rc = 0;
+
+    // Negative chroma is rejected, returns black instead of NaN
+    cmsSetLogErrorHandler(NULL);
+
+    JCh.J = 50.0;
+    JCh.C = -10.0;
+    JCh.h = 120.0;
+    cmsCIECAM16Reverse(hMod, &JCh, &XYZ);
+
+    ResetFatalError();
+
+    if (!IsGoodVal("X (C<0)", 0.0, XYZ.X, 0.0)) rc = 0;
+    if (!IsGoodVal("Y (C<0)", 0.0, XYZ.Y, 0.0)) rc = 0;
+    if (!IsGoodVal("Z (C<0)", 0.0, XYZ.Z, 0.0)) rc = 0;
+
+    cmsCIECAM16Done(hMod);
+
+    return rc;
+}
+
 // --------------------------------------------------------------------------------------------------
 // P E R F O R M A N C E   C H E C K S
 // --------------------------------------------------------------------------------------------------
@@ -9882,6 +10145,13 @@ int main(int argc, char* argv[])
     Check("Saving linearization devicelink", CheckSaveLinearizationDevicelink);
     Check("Gamut check on floats", CheckGamutCheckFloats);
     Check("Mixing RAW and Cooked tags", CheckMixedRawAndCooked);
+
+    // Colour appearance model (CIE 248:2022)
+    Check("CIECAM16 forward", CheckCIECAM16Forward);
+    Check("CIECAM16 reverse", CheckCIECAM16Reverse);
+    Check("CIECAM16 round-trip", CheckCIECAM16Roundtrip);
+    Check("Two-step CAT16", CheckCAT16TwoStep);
+    Check("CIECAM16 input validation", CheckCIECAM16InputValidation);
     }
 
     if (DoPluginTests)

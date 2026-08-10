@@ -254,6 +254,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\..\src\cmsalpha.c" />
     <ClCompile Include="..\..\..\src\cmscam02.c" />
+    <ClCompile Include="..\..\..\src\cmscam16.c" />
     <ClCompile Include="..\..\..\src\cmscgats.c" />
     <ClCompile Include="..\..\..\src\cmscnvrt.c" />
     <ClCompile Include="..\..\..\src\cmserr.c" />
