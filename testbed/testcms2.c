@@ -9113,6 +9113,89 @@ cmsInt32Number CheckCAT16TwoStep(void)
     if (!IsGoodVal("Y", 43.6943, out.Y, 0.001)) rc = 0;
     if (!IsGoodVal("Z", 20.5167, out.Z, 0.001)) rc = 0;
 
+    // Degenerate white points must be rejected (they would divide by
+    // ~zero in CAT16 space). These signal an error, silence the logger
+    cmsSetLogErrorHandler(NULL);
+
+    whiteSrc.X = whiteSrc.Y = whiteSrc.Z = 0.0;
+    if (cmsCAT16(&whiteSrc, 100.0, &whiteDst, 200.0, AVG_SURROUND, &in, &out)) {
+        Fail("CAT16 with zero source white not rejected");
+        rc = 0;
+    }
+
+    ResetFatalError();
+
+    return rc;
+}
+
+static
+cmsInt32Number CheckCIECAM16InputValidation(void)
+{
+    cmsViewingConditions vc;
+    cmsHANDLE hMod;
+    cmsCIEXYZ XYZ;
+    cmsJCh JCh;
+    cmsInt32Number rc = 1;
+
+    vc.whitePoint.X = 96.46;
+    vc.whitePoint.Y = 100.00;
+    vc.whitePoint.Z = 108.62;
+    vc.Yb = 16.0;
+    vc.La = 40.0;
+    vc.surround = AVG_SURROUND;
+    vc.D_value = D_CALCULATE;
+
+    // Out-of-domain viewing conditions must be rejected. These calls
+    // signal errors on purpose, so silence the logger meanwhile
+    cmsSetLogErrorHandler(NULL);
+
+    vc.Yb = 0.0;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yb = 0 not rejected"); rc = 0; }
+    vc.Yb = -5.0;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yb < 0 not rejected"); rc = 0; }
+    vc.Yb = 16.0;
+
+    vc.whitePoint.Y = 0.0;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yw = 0 not rejected"); rc = 0; }
+    vc.whitePoint.Y = -1.0;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yw < 0 not rejected"); rc = 0; }
+    vc.whitePoint.Y = 100.0;
+
+    vc.La = 0.0;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("La = 0 not rejected"); rc = 0; }
+    vc.La = -5.0;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("La < 0 not rejected"); rc = 0; }
+    vc.La = 40.0;
+
+    ResetFatalError();
+
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) return 0;
+
+    // Pure black: all correlates must be exactly zero
+    XYZ.X = XYZ.Y = XYZ.Z = 0.0;
+    cmsCIECAM16Forward(hMod, &XYZ, &JCh);
+
+    if (!IsGoodVal("J (black)", 0.0, JCh.J, 0.0)) rc = 0;
+    if (!IsGoodVal("C (black)", 0.0, JCh.C, 0.0)) rc = 0;
+    if (!IsGoodVal("h (black)", 0.0, JCh.h, 0.0)) rc = 0;
+
+    // Negative chroma is rejected, returns black instead of NaN
+    cmsSetLogErrorHandler(NULL);
+
+    JCh.J = 50.0;
+    JCh.C = -10.0;
+    JCh.h = 120.0;
+    cmsCIECAM16Reverse(hMod, &JCh, &XYZ);
+
+    ResetFatalError();
+
+    if (!IsGoodVal("X (C<0)", 0.0, XYZ.X, 0.0)) rc = 0;
+    if (!IsGoodVal("Y (C<0)", 0.0, XYZ.Y, 0.0)) rc = 0;
+    if (!IsGoodVal("Z (C<0)", 0.0, XYZ.Z, 0.0)) rc = 0;
+
+    cmsCIECAM16Done(hMod);
+
     return rc;
 }
 
@@ -10068,6 +10151,7 @@ int main(int argc, char* argv[])
     Check("CIECAM16 reverse", CheckCIECAM16Reverse);
     Check("CIECAM16 round-trip", CheckCIECAM16Roundtrip);
     Check("Two-step CAT16", CheckCAT16TwoStep);
+    Check("CIECAM16 input validation", CheckCIECAM16InputValidation);
     }
 
     if (DoPluginTests)

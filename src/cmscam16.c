@@ -217,11 +217,11 @@ CAM16COLOR ComputeCorrelates(CAM16COLOR clr, cmsCIECAM16* pMod)
     a = clr.RGBa[0] - (12.0 * clr.RGBa[1] / 11.0) + (clr.RGBa[2] / 11.0);
     b = (clr.RGBa[0] + clr.RGBa[1] - (2.0 * clr.RGBa[2])) / 9.0;
 
-    r2d = (180.0 / 3.141592654);
+    r2d = (180.0 / M_PI);
     clr.h = r2d * atan2(b, a);
     if (clr.h < 0.0) clr.h += 360.0;
 
-    d2r = (3.141592654 / 180.0);
+    d2r = (M_PI / 180.0);
     e = ((12500.0 / 13.0) * pMod -> Nc * pMod -> Ncb) *
         (cos((clr.h * d2r + 2.0)) + 3.8);
 
@@ -276,7 +276,7 @@ CAM16COLOR InverseCorrelates(CAM16COLOR clr, cmsCIECAM16* pMod)
 {
 
     cmsFloat64Number t, e, p1, p2, p3, p4, p5, hr, d2r;
-    d2r = 3.141592654 / 180.0;
+    d2r = M_PI / 180.0;
 
     t = pow( (clr.C / (pow((clr.J / 100.0), 0.5) *
         (pow((1.64 - pow(0.29, pMod -> n)), 0.73)))),
@@ -391,6 +391,21 @@ cmsHANDLE  CMSEXPORT cmsCIECAM16Init(cmsContext ContextID, const cmsViewingCondi
         return NULL;
     }
 
+    // A null white point makes n, D_RGB and everything downstream NaN
+    if (pVC -> whitePoint.Y <= 0.0) {
+        cmsSignalError(ContextID, cmsERROR_RANGE,
+                       "cmsCIECAM16Init: white point Y must be > 0");
+        return NULL;
+    }
+
+    // LA <= 0 makes Eqs. 5.5/5.6 undefined (negative base power, division
+    // by zero); the model is specified for photopic levels (Clause 1.3)
+    if (pVC -> La <= 0.0) {
+        cmsSignalError(ContextID, cmsERROR_RANGE,
+                       "cmsCIECAM16Init: La must be > 0");
+        return NULL;
+    }
+
     if((lpMod = (cmsCIECAM16*) _cmsMallocZero(ContextID, sizeof(cmsCIECAM16))) == NULL) {
         return NULL;
     }
@@ -486,6 +501,13 @@ void CMSEXPORT cmsCIECAM16ForwardEx(cmsHANDLE hModel, const cmsCIEXYZ* pIn, cmsC
 
     memset(&clr, 0, sizeof(clr));
 
+    // Pure black: all correlates are exactly zero. Hue is undefined in
+    // this case; report it as zero instead of an IEEE residual artifact
+    if (pIn -> X == 0.0 && pIn -> Y == 0.0 && pIn -> Z == 0.0) {
+        memset(pOut, 0, sizeof(cmsCIECAM16Appearance));
+        return;
+    }
+
     clr.XYZ[0] = pIn -> X;
     clr.XYZ[1] = pIn -> Y;
     clr.XYZ[2] = pIn -> Z;
@@ -538,6 +560,15 @@ void CMSEXPORT cmsCIECAM16ReverseEx(cmsHANDLE hModel, const cmsCIECAM16Appearanc
 
     if (clr.J <= 0.0) {
         // Achromatic black, avoid divisions by zero down the pipeline
+        pOut -> X = pOut -> Y = pOut -> Z = 0.0;
+        return;
+    }
+
+    if (clr.C < 0.0) {
+        // Negative chroma is outside the model domain; without this guard
+        // pow(C, 1/0.9) yields NaN that propagates silently to the output
+        cmsSignalError(lpMod -> ContextID, cmsERROR_RANGE,
+                       "cmsCIECAM16ReverseEx: C must be >= 0");
         pOut -> X = pOut -> Y = pOut -> Z = 0.0;
         return;
     }
@@ -622,6 +653,18 @@ cmsBool CMSEXPORT cmsCAT16(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc,
     clr      = XYZtoCAT16(clr);
     whiteSrc = XYZtoCAT16(whiteSrc);
     whiteDst = XYZtoCAT16(whiteDst);
+
+    // A degenerate white point would make the D_RGB ratios below
+    // meaningless (division by ~zero). Same check as the one in
+    // ComputeChromaticAdaptation for the Bradford transform
+    for (i = 0; i < 3; i++) {
+        if ((fabs(whiteSrc.RGB[i]) < MATRIX_DET_TOLERANCE) ||
+            (fabs(whiteDst.RGB[i]) < MATRIX_DET_TOLERANCE)) {
+            cmsSignalError(NULL, cmsERROR_RANGE,
+                           "cmsCAT16: degenerate white point");
+            return FALSE;
+        }
+    }
 
     // Annex A, step 2 (Eq. 4.3), D constrained to the range [0, 1]
     Dsrc = F * (1.0 - ((1.0 / 3.6) * exp((-LaSrc - 42.0) / 92.0)));
