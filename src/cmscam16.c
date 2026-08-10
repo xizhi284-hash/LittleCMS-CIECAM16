@@ -385,7 +385,11 @@ cmsHANDLE  CMSEXPORT cmsCIECAM16Init(cmsContext ContextID, const cmsViewingCondi
 
     // Yb == 0 is an error condition (CIE 248:2022, Clause 4):
     // the model does not apply to unrelated colours
-    if (pVC -> Yb <= 0.0) return NULL;
+    if (pVC -> Yb <= 0.0) {
+        cmsSignalError(ContextID, cmsERROR_RANGE,
+                       "cmsCIECAM16Init: Yb must be > 0 (unrelated colors not supported)");
+        return NULL;
+    }
 
     if((lpMod = (cmsCIECAM16*) _cmsMallocZero(ContextID, sizeof(cmsCIECAM16))) == NULL) {
         return NULL;
