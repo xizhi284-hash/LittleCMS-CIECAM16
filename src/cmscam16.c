@@ -1,7 +1,12 @@
 //---------------------------------------------------------------------------------
 //
 //  Little Color Management System
-//  Copyright (c) 1998-2026 Marti Maria Saguer
+//  CIECAM16 appearance model (CIE 248:2022) - this file is an extension
+//  maintained in the fork at https://github.com/xizhi284-hash/Little-CMS,
+//  it is not part of upstream lcms2.
+//
+//  Copyright (c) 2026 Xizhi, xizhi284@gmail.com (CIECAM16 implementation)
+//  Portions Copyright (c) 1998-2026 Marti Maria Saguer (lcms2 framework)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the "Software"),
