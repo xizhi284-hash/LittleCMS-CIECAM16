@@ -9129,6 +9129,91 @@ cmsInt32Number CheckCAT16TwoStep(void)
 }
 
 static
+cmsInt32Number CheckCIECAM16CAT16Ex(void)
+{
+    cmsCIEXYZ whiteSrc, whiteDst, in, out, outRef;
+    cmsInt32Number rc = 1;
+
+    whiteSrc.X = 109.850;
+    whiteSrc.Y = 100.0;
+    whiteSrc.Z =  35.585;
+
+    whiteDst.X =  96.422;
+    whiteDst.Y = 100.0;
+    whiteDst.Z =  82.521;
+
+    in.X = 48.900;
+    in.Y = 43.620;
+    in.Z =  6.250;
+
+    // Forced complete adaptation: the source white must map onto the
+    // destination white (profile building semantics, e.g. dcamprof).
+    // Tolerance floor ~1e-7: the CAT16 matrix and its inverse as published
+    // (6 and 8 decimals) are not exact inverses of each other
+    if (!cmsCAT16Ex(&whiteSrc, 20.0, 1.0, &whiteDst, 20.0, 1.0, AVG_SURROUND, &whiteSrc, &out)) return 0;
+
+    if (!IsGoodVal("X (D=1, white)", whiteDst.X, out.X, 1e-6)) rc = 0;
+    if (!IsGoodVal("Y (D=1, white)", whiteDst.Y, out.Y, 1e-6)) rc = 0;
+    if (!IsGoodVal("Z (D=1, white)", whiteDst.Z, out.Z, 1e-6)) rc = 0;
+
+    // D_CALCULATE at both ends must reproduce cmsCAT16 exactly
+    if (!cmsCAT16(&whiteSrc, 100.0, &whiteDst, 200.0, AVG_SURROUND, &in, &outRef)) return 0;
+    if (!cmsCAT16Ex(&whiteSrc, 100.0, D_CALCULATE, &whiteDst, 200.0, D_CALCULATE, AVG_SURROUND, &in, &out)) return 0;
+
+    if (!IsGoodVal("X (D_CALCULATE == cmsCAT16)", outRef.X, out.X, 0.0)) rc = 0;
+    if (!IsGoodVal("Y (D_CALCULATE == cmsCAT16)", outRef.Y, out.Y, 0.0)) rc = 0;
+    if (!IsGoodVal("Z (D_CALCULATE == cmsCAT16)", outRef.Z, out.Z, 0.0)) rc = 0;
+
+    // La is ignored at the ends where D is explicit, so a bogus La
+    // must not affect the result nor cause a failure
+    if (!cmsCAT16Ex(&whiteSrc, 0.0, 1.0, &whiteDst, -1.0, 1.0, AVG_SURROUND, &whiteSrc, &out)) {
+        Fail("explicit D should not require a valid La");
+        rc = 0;
+    }
+    else {
+        if (!IsGoodVal("X (La ignored)", whiteDst.X, out.X, 1e-6)) rc = 0;
+        if (!IsGoodVal("Y (La ignored)", whiteDst.Y, out.Y, 1e-6)) rc = 0;
+        if (!IsGoodVal("Z (La ignored)", whiteDst.Z, out.Z, 1e-6)) rc = 0;
+    }
+
+    // Invalid inputs must be rejected. These signal errors on purpose,
+    // silence the logger meanwhile
+    cmsSetLogErrorHandler(NULL);
+
+    // Explicit D outside [0, 1] or NaN
+    if (cmsCAT16Ex(&whiteSrc, 20.0, 2.0, &whiteDst, 20.0, 1.0, AVG_SURROUND, &in, &out)) {
+        Fail("Dsrc = 2 not rejected"); rc = 0;
+    }
+    if (cmsCAT16Ex(&whiteSrc, 20.0, 1.0, &whiteDst, 20.0, -0.5, AVG_SURROUND, &in, &out)) {
+        Fail("Ddst < 0 not rejected"); rc = 0;
+    }
+    if (cmsCAT16Ex(&whiteSrc, 20.0, (cmsFloat64Number) NAN, &whiteDst, 20.0, 1.0, AVG_SURROUND, &in, &out)) {
+        Fail("Dsrc = NaN not rejected"); rc = 0;
+    }
+
+    // Invalid La at an end where D is derived from it
+    if (cmsCAT16Ex(&whiteSrc, (cmsFloat64Number) NAN, D_CALCULATE, &whiteDst, 200.0, D_CALCULATE, AVG_SURROUND, &in, &out)) {
+        Fail("LaSrc = NaN not rejected"); rc = 0;
+    }
+    if (cmsCAT16Ex(&whiteSrc, 0.0, D_CALCULATE, &whiteDst, 200.0, D_CALCULATE, AVG_SURROUND, &in, &out)) {
+        Fail("LaSrc = 0 not rejected"); rc = 0;
+    }
+
+    // NaN white point components slip past fabs() < tol comparisons
+    {
+        cmsCIEXYZ nanWhite = whiteSrc;
+        nanWhite.X = (cmsFloat64Number) NAN;
+        if (cmsCAT16Ex(&nanWhite, 20.0, 1.0, &whiteDst, 20.0, 1.0, AVG_SURROUND, &in, &out)) {
+            Fail("NaN white point not rejected"); rc = 0;
+        }
+    }
+
+    ResetFatalError();
+
+    return rc;
+}
+
+static
 cmsInt32Number CheckCIECAM16InputValidation(void)
 {
     cmsViewingConditions vc;
@@ -9166,6 +9251,39 @@ cmsInt32Number CheckCIECAM16InputValidation(void)
     vc.La = -5.0;
     if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("La < 0 not rejected"); rc = 0; }
     vc.La = 40.0;
+
+    // NaN slips past <= 0 comparisons; it must be rejected as well
+    vc.Yb = (cmsFloat64Number) NAN;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yb = NaN not rejected"); rc = 0; }
+    vc.Yb = 16.0;
+
+    vc.whitePoint.Y = (cmsFloat64Number) NAN;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yw = NaN not rejected"); rc = 0; }
+    vc.whitePoint.Y = 100.0;
+
+    vc.La = (cmsFloat64Number) NAN;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("La = NaN not rejected"); rc = 0; }
+    vc.La = 40.0;
+
+    // An explicit degree of adaptation must be finite and within [0, 1]
+    vc.D_value = (cmsFloat64Number) NAN;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("D = NaN not rejected"); rc = 0; }
+    vc.D_value = -0.5;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("D < 0 not rejected"); rc = 0; }
+    vc.D_value = 1.5;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("D > 1 not rejected"); rc = 0; }
+
+    // Boundary and in-range explicit values are valid
+    vc.D_value = 0.0;
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) { Fail("D = 0 rejected"); rc = 0; } else cmsCIECAM16Done(hMod);
+    vc.D_value = 1.0;
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) { Fail("D = 1 rejected"); rc = 0; } else cmsCIECAM16Done(hMod);
+    vc.D_value = 0.7;
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) { Fail("D = 0.7 rejected"); rc = 0; } else cmsCIECAM16Done(hMod);
+    vc.D_value = D_CALCULATE;
 
     ResetFatalError();
 
@@ -10151,6 +10269,7 @@ int main(int argc, char* argv[])
     Check("CIECAM16 reverse", CheckCIECAM16Reverse);
     Check("CIECAM16 round-trip", CheckCIECAM16Roundtrip);
     Check("Two-step CAT16", CheckCAT16TwoStep);
+    Check("Two-step CAT16 with D override", CheckCIECAM16CAT16Ex);
     Check("CIECAM16 input validation", CheckCIECAM16InputValidation);
     }
 
