@@ -385,25 +385,26 @@ cmsHANDLE  CMSEXPORT cmsCIECAM16Init(cmsContext ContextID, const cmsViewingCondi
 
     // Yb == 0 is an error condition (CIE 248:2022, Clause 4):
     // the model does not apply to unrelated colours.
-    // The !(x > 0) form also rejects NaN, which slips past <= checks
-    if (!(pVC -> Yb > 0.0)) {
+    // The !(x > 0) form also rejects NaN, which slips past <= checks;
+    // isinf rejects +inf, which would pass it and produce NaN downstream
+    if (isinf(pVC -> Yb) || !(pVC -> Yb > 0.0)) {
         cmsSignalError(ContextID, cmsERROR_RANGE,
-                       "cmsCIECAM16Init: Yb must be > 0 (unrelated colors not supported)");
+                       "cmsCIECAM16Init: Yb must be finite and > 0 (unrelated colors not supported)");
         return NULL;
     }
 
     // A null white point makes n, D_RGB and everything downstream NaN
-    if (!(pVC -> whitePoint.Y > 0.0)) {
+    if (isinf(pVC -> whitePoint.Y) || !(pVC -> whitePoint.Y > 0.0)) {
         cmsSignalError(ContextID, cmsERROR_RANGE,
-                       "cmsCIECAM16Init: white point Y must be > 0");
+                       "cmsCIECAM16Init: white point Y must be finite and > 0");
         return NULL;
     }
 
     // LA <= 0 makes Eqs. 5.5/5.6 undefined (negative base power, division
     // by zero); the model is specified for photopic levels (Clause 1.3)
-    if (!(pVC -> La > 0.0)) {
+    if (isinf(pVC -> La) || !(pVC -> La > 0.0)) {
         cmsSignalError(ContextID, cmsERROR_RANGE,
-                       "cmsCIECAM16Init: La must be > 0");
+                       "cmsCIECAM16Init: La must be finite and > 0");
         return NULL;
     }
 
@@ -635,15 +636,16 @@ cmsBool CMSEXPORT cmsCAT16Ex(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc,
     _cmsAssert(pOut != NULL);
 
     // La is only meaningful (and therefore only validated) at the ends
-    // where D is derived from it; the !(x > 0) form also rejects NaN
-    if (Dsrc == D_CALCULATE && !(LaSrc > 0.0)) {
+    // where D is derived from it; the !(x > 0) form also rejects NaN,
+    // isinf rejects +inf
+    if (Dsrc == D_CALCULATE && (isinf(LaSrc) || !(LaSrc > 0.0))) {
         cmsSignalError(NULL, cmsERROR_RANGE,
-                       "cmsCAT16Ex: LaSrc must be > 0 when Dsrc is D_CALCULATE");
+                       "cmsCAT16Ex: LaSrc must be finite and > 0 when Dsrc is D_CALCULATE");
         return FALSE;
     }
-    if (Ddst == D_CALCULATE && !(LaDst > 0.0)) {
+    if (Ddst == D_CALCULATE && (isinf(LaDst) || !(LaDst > 0.0))) {
         cmsSignalError(NULL, cmsERROR_RANGE,
-                       "cmsCAT16Ex: LaDst must be > 0 when Ddst is D_CALCULATE");
+                       "cmsCAT16Ex: LaDst must be finite and > 0 when Ddst is D_CALCULATE");
         return FALSE;
     }
 
@@ -700,12 +702,13 @@ cmsBool CMSEXPORT cmsCAT16Ex(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc,
     // A degenerate white point would make the D_RGB ratios below
     // meaningless (division by ~zero). Same check as the one in
     // ComputeChromaticAdaptation for the Bradford transform; the
-    // !(x >= tol) form also rejects NaN components
+    // !(x >= tol) form also rejects NaN components, isinf rejects inf
     for (i = 0; i < 3; i++) {
-        if (!(fabs(whiteSrc.RGB[i]) >= MATRIX_DET_TOLERANCE) ||
+        if (isinf(whiteSrc.RGB[i]) || isinf(whiteDst.RGB[i]) ||
+            !(fabs(whiteSrc.RGB[i]) >= MATRIX_DET_TOLERANCE) ||
             !(fabs(whiteDst.RGB[i]) >= MATRIX_DET_TOLERANCE)) {
             cmsSignalError(NULL, cmsERROR_RANGE,
-                           "cmsCAT16Ex: degenerate white point");
+                           "cmsCAT16Ex: degenerate or non-finite white point");
             return FALSE;
         }
     }

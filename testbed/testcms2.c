@@ -9164,6 +9164,22 @@ cmsInt32Number CheckCIECAM16CAT16Ex(void)
     if (!IsGoodVal("Y (D_CALCULATE == cmsCAT16)", outRef.Y, out.Y, 0.0)) rc = 0;
     if (!IsGoodVal("Z (D_CALCULATE == cmsCAT16)", outRef.Z, out.Z, 0.0)) rc = 0;
 
+    // Known-answer vector, mixed ends: explicit Dsrc = 0.7 (LaSrc ignored),
+    // Ddst derived from LaDst = 200. Expected values computed per the
+    // CIE 248:2022 Annex A two-step procedure (Eqs. A.1 - A.16)
+    {
+        cmsCIEXYZ d65;
+        d65.X = 95.047;
+        d65.Y = 100.0;
+        d65.Z = 108.883;
+
+        if (!cmsCAT16Ex(&whiteSrc, 0.0, 0.7, &d65, 200.0, D_CALCULATE, AVG_SURROUND, &in, &out)) return 0;
+
+        if (!IsGoodVal("X (mixed D)", 41.8671352553, out.X, 1e-9)) rc = 0;
+        if (!IsGoodVal("Y (mixed D)", 43.6645793200, out.Y, 1e-9)) rc = 0;
+        if (!IsGoodVal("Z (mixed D)", 17.0436367924, out.Z, 1e-9)) rc = 0;
+    }
+
     // La is ignored at the ends where D is explicit, so a bogus La
     // must not affect the result nor cause a failure
     if (!cmsCAT16Ex(&whiteSrc, 0.0, 1.0, &whiteDst, -1.0, 1.0, AVG_SURROUND, &whiteSrc, &out)) {
@@ -9198,6 +9214,9 @@ cmsInt32Number CheckCIECAM16CAT16Ex(void)
     if (cmsCAT16Ex(&whiteSrc, 0.0, D_CALCULATE, &whiteDst, 200.0, D_CALCULATE, AVG_SURROUND, &in, &out)) {
         Fail("LaSrc = 0 not rejected"); rc = 0;
     }
+    if (cmsCAT16Ex(&whiteSrc, (cmsFloat64Number) INFINITY, D_CALCULATE, &whiteDst, 200.0, D_CALCULATE, AVG_SURROUND, &in, &out)) {
+        Fail("LaSrc = +Inf not rejected"); rc = 0;
+    }
 
     // NaN white point components slip past fabs() < tol comparisons
     {
@@ -9205,6 +9224,15 @@ cmsInt32Number CheckCIECAM16CAT16Ex(void)
         nanWhite.X = (cmsFloat64Number) NAN;
         if (cmsCAT16Ex(&nanWhite, 20.0, 1.0, &whiteDst, 20.0, 1.0, AVG_SURROUND, &in, &out)) {
             Fail("NaN white point not rejected"); rc = 0;
+        }
+    }
+
+    // +Inf white point components pass fabs() >= tol comparisons
+    {
+        cmsCIEXYZ infWhite = whiteSrc;
+        infWhite.Z = (cmsFloat64Number) INFINITY;
+        if (cmsCAT16Ex(&infWhite, 20.0, 1.0, &whiteDst, 20.0, 1.0, AVG_SURROUND, &in, &out)) {
+            Fail("+Inf white point not rejected"); rc = 0;
         }
     }
 
@@ -9263,6 +9291,19 @@ cmsInt32Number CheckCIECAM16InputValidation(void)
 
     vc.La = (cmsFloat64Number) NAN;
     if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("La = NaN not rejected"); rc = 0; }
+    vc.La = 40.0;
+
+    // +Inf passes !(x > 0) comparisons; it must be rejected as well
+    vc.Yb = (cmsFloat64Number) INFINITY;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yb = +Inf not rejected"); rc = 0; }
+    vc.Yb = 16.0;
+
+    vc.whitePoint.Y = (cmsFloat64Number) INFINITY;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yw = +Inf not rejected"); rc = 0; }
+    vc.whitePoint.Y = 100.0;
+
+    vc.La = (cmsFloat64Number) INFINITY;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("La = +Inf not rejected"); rc = 0; }
     vc.La = 40.0;
 
     // An explicit degree of adaptation must be finite and within [0, 1]
