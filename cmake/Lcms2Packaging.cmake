@@ -7,13 +7,13 @@ function(lcms2_setup_packaging)
     FILES
       "${PROJECT_SOURCE_DIR}/include/lcms2.h"
       "${PROJECT_SOURCE_DIR}/include/lcms2_plugin.h"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/lcms2_ciecam16"
   )
 
   # Collect installable targets.
   set(_install_targets "")
 
-  foreach(_t IN ITEMS lcms2 lcms2_static)
+  foreach(_t IN ITEMS lcms2_ciecam16 lcms2_ciecam16_static)
     if(TARGET ${_t})
       list(APPEND _install_targets ${_t})
     endif()
@@ -38,7 +38,7 @@ function(lcms2_setup_packaging)
   if(_install_targets)
     install(
       TARGETS ${_install_targets}
-      EXPORT lcms2-targets
+      EXPORT lcms2_ciecam16-targets
       RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
       LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
       ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -55,41 +55,41 @@ function(lcms2_setup_packaging)
   endif()
 
   # CMake package config.
-  set(_lcms2_cmake_config_dir "${CMAKE_INSTALL_LIBDIR}/cmake/lcms2")
+  set(_lcms2_cmake_config_dir "${CMAKE_INSTALL_LIBDIR}/cmake/lcms2_ciecam16")
 
   install(
-    EXPORT lcms2-targets
-    NAMESPACE lcms2::
+    EXPORT lcms2_ciecam16-targets
+    NAMESPACE lcms2_ciecam16::
     DESTINATION "${_lcms2_cmake_config_dir}"
   )
 
   configure_package_config_file(
-    "${PROJECT_SOURCE_DIR}/cmake/lcms2-config.cmake.in"
-    "${PROJECT_BINARY_DIR}/lcms2-config.cmake"
+    "${PROJECT_SOURCE_DIR}/cmake/lcms2_ciecam16-config.cmake.in"
+    "${PROJECT_BINARY_DIR}/lcms2_ciecam16-config.cmake"
     INSTALL_DESTINATION "${_lcms2_cmake_config_dir}"
   )
 
   write_basic_package_version_file(
-    "${PROJECT_BINARY_DIR}/lcms2-config-version.cmake"
+    "${PROJECT_BINARY_DIR}/lcms2_ciecam16-config-version.cmake"
     VERSION "${PROJECT_VERSION}"
     COMPATIBILITY SameMajorVersion
   )
 
   install(
     FILES
-      "${PROJECT_BINARY_DIR}/lcms2-config.cmake"
-      "${PROJECT_BINARY_DIR}/lcms2-config-version.cmake"
+      "${PROJECT_BINARY_DIR}/lcms2_ciecam16-config.cmake"
+      "${PROJECT_BINARY_DIR}/lcms2_ciecam16-config-version.cmake"
     DESTINATION "${_lcms2_cmake_config_dir}"
   )
 
   # Build-tree export for local consumption.
   export(
-    EXPORT lcms2-targets
-    NAMESPACE lcms2::
-    FILE "${PROJECT_BINARY_DIR}/lcms2-targets.cmake"
+    EXPORT lcms2_ciecam16-targets
+    NAMESPACE lcms2_ciecam16::
+    FILE "${PROJECT_BINARY_DIR}/lcms2_ciecam16-targets.cmake"
   )
 
-  # pkg-config generation (mirrors lcms2.pc.in semantics).
+  # pkg-config generation (mirrors lcms2_ciecam16.pc.in semantics).
   set(LIB_PLUGINS "")
   if(DEFINED LCMS2_PLUGIN_TARGETS)
     foreach(_t IN LISTS LCMS2_PLUGIN_TARGETS)
@@ -135,12 +135,12 @@ function(lcms2_setup_packaging)
   set(PACKAGE "${PROJECT_NAME}")
   set(VERSION "${PROJECT_VERSION}")
   configure_file(
-    "${PROJECT_SOURCE_DIR}/lcms2.pc.in"
-    "${PROJECT_BINARY_DIR}/lcms2.pc"
+    "${PROJECT_SOURCE_DIR}/lcms2_ciecam16.pc.in"
+    "${PROJECT_BINARY_DIR}/lcms2_ciecam16.pc"
     @ONLY
   )
   install(
-    FILES "${PROJECT_BINARY_DIR}/lcms2.pc"
+    FILES "${PROJECT_BINARY_DIR}/lcms2_ciecam16.pc"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
   )
 endfunction()

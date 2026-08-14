@@ -4,8 +4,8 @@ libdir=@libdir@
 includedir=@includedir@
 
 Name: @PACKAGE@
-Description: LCMS Color Management Library
+Description: LCMS Color Management Library (CIECAM16 fork)
 Version: @VERSION@
-Libs: -L${libdir} -llcms2 @LIB_PLUGINS@
+Libs: -L${libdir} -llcms2_ciecam16 @LIB_PLUGINS@
 Libs.private: @LIB_MATH@ @LIB_THREAD@
-Cflags: -I${includedir}
+Cflags: -I${includedir}/lcms2_ciecam16

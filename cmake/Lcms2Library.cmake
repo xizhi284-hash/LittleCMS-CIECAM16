@@ -38,7 +38,7 @@ function(_lcms2_apply_common_settings tgt)
   target_include_directories(${tgt}
     PUBLIC
       $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-      $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+      $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/lcms2_ciecam16>
   )
 
   # Feature defines derived from configure.ac parity.
@@ -111,36 +111,36 @@ function(lcms2_add_library)
   set(_lcms2_static_target "")
 
   if(LCMS2_BUILD_SHARED)
-    add_library(lcms2 SHARED ${_lcms2_sources})
-    set(_lcms2_shared_target lcms2)
+    add_library(lcms2_ciecam16 SHARED ${_lcms2_sources})
+    set(_lcms2_shared_target lcms2_ciecam16)
 
     if(WIN32)
-      target_compile_definitions(lcms2 PRIVATE CMS_DLL_BUILD)
-      target_compile_definitions(lcms2 INTERFACE CMS_DLL)
+      target_compile_definitions(lcms2_ciecam16 PRIVATE CMS_DLL_BUILD)
+      target_compile_definitions(lcms2_ciecam16 INTERFACE CMS_DLL)
     endif()
 
-    set_target_properties(lcms2 PROPERTIES
+    set_target_properties(lcms2_ciecam16 PROPERTIES
       VERSION "${PROJECT_VERSION}.0"
       SOVERSION "2"
     )
 
-    _lcms2_apply_common_settings(lcms2)
-    _lcms2_apply_thread_settings(lcms2)
+    _lcms2_apply_common_settings(lcms2_ciecam16)
+    _lcms2_apply_thread_settings(lcms2_ciecam16)
   endif()
 
   if(LCMS2_BUILD_STATIC)
     if(LCMS2_BUILD_SHARED AND WIN32)
-      add_library(lcms2_static STATIC ${_lcms2_sources})
-      set(_lcms2_static_target lcms2_static)
-      set_target_properties(lcms2_static PROPERTIES OUTPUT_NAME "lcms2_static")
+      add_library(lcms2_ciecam16_static STATIC ${_lcms2_sources})
+      set(_lcms2_static_target lcms2_ciecam16_static)
+      set_target_properties(lcms2_ciecam16_static PROPERTIES OUTPUT_NAME "lcms2_ciecam16_static")
     else()
       if(LCMS2_BUILD_SHARED)
-        add_library(lcms2_static STATIC ${_lcms2_sources})
-        set(_lcms2_static_target lcms2_static)
-        set_target_properties(lcms2_static PROPERTIES OUTPUT_NAME "lcms2")
+        add_library(lcms2_ciecam16_static STATIC ${_lcms2_sources})
+        set(_lcms2_static_target lcms2_ciecam16_static)
+        set_target_properties(lcms2_ciecam16_static PROPERTIES OUTPUT_NAME "lcms2_ciecam16")
       else()
-        add_library(lcms2 STATIC ${_lcms2_sources})
-        set(_lcms2_static_target lcms2)
+        add_library(lcms2_ciecam16 STATIC ${_lcms2_sources})
+        set(_lcms2_static_target lcms2_ciecam16)
       endif()
     endif()
 

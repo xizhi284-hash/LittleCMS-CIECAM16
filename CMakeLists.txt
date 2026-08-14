@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16...3.29)
 
-project(lcms2
+project(lcms2_ciecam16
   VERSION 2.19
   LANGUAGES C
 )
