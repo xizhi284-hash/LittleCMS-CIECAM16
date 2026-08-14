@@ -8983,6 +8983,138 @@ cmsInt32Number CheckCIECAM16Forward(void)
     return rc;
 }
 
+
+static
+cmsInt32Number CheckCIECAM16HueQuadrature(void)
+{
+    // Hue quadrature boundary pins (Eq. 5.26, Table 3). The XYZ values are
+    // constants generated from the verified Python reference (J=50, C=30 at
+    // each h), so every branch and the mod-400 seam at h = 20.14 is
+    // exercised: colour-science has known defects exactly at these points
+    // (anchor boundary bug and a non-spec wrap variant deviating 5.69 at
+    // h = 0).
+    static const struct {
+        cmsFloat64Number XYZ[3];
+        cmsFloat64Number H;
+    } Pins[] = {
+        { { 31.3801106687, 26.0174683631, 28.6021756908 }, 380.2135184712 },  // h = 0 wrap seam
+        { { 31.1715702896, 26.0477163917, 21.1594443626 }, 399.9989479597 },  // h = 20.139 (0.001 left of the 20.14 anchor), H → 400 seam
+        { { 31.1715197249, 26.0477269309, 21.1587711131 },   0.0012522401 },  // h = 20.141 (0.001 right of the 20.14 anchor), H wraps to 0
+        { { 26.0212284345, 27.1772807143, 10.6511679595 },  99.9999977918 },  // h = 90 anchor
+        { { 21.3800710632, 28.2503550119, 24.8594628998 }, 199.9999999584 },  // h = 164.25 anchor
+        { { 24.5288704251, 27.7000859541, 46.4754891882 }, 299.9999978344 },  // h = 237.53 anchor
+        { { 29.1340305594, 26.6439216494, 48.0297136246 }, 334.1964078269 }   // h = 300, wrap segment interior (e4)
+    };
+
+    cmsViewingConditions vc;
+    cmsHANDLE hMod;
+    cmsCIEXYZ XYZ;
+    cmsCIECAM16Appearance appearance;
+    cmsUInt32Number i;
+    cmsInt32Number rc = 1;
+    char Label[32];
+
+    vc.whitePoint.X = 95.047;
+    vc.whitePoint.Y = 100.00;
+    vc.whitePoint.Z = 108.883;
+    vc.Yb = 16.0;
+    vc.La = 40.0;
+    vc.surround = AVG_SURROUND;
+    vc.D_value = D_CALCULATE;
+
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) return 0;
+
+    for (i = 0; i < sizeof(Pins) / sizeof(Pins[0]); i++) {
+
+        XYZ.X = Pins[i].XYZ[0];
+        XYZ.Y = Pins[i].XYZ[1];
+        XYZ.Z = Pins[i].XYZ[2];
+
+        cmsCIECAM16ForwardEx(hMod, &XYZ, &appearance);
+
+        sprintf(Label, "H quad[%u]", i);
+
+        if (!IsGoodVal(Label, Pins[i].H, appearance.H, 0.001)) rc = 0;
+    }
+
+    cmsCIECAM16Done(hMod);
+
+    return rc;
+}
+
+static
+cmsInt32Number CheckCIECAM16CompressionBranches(void)
+{
+    // Pins for the three branches of the modified hyperbolic compression
+    // (Eqs. 3.2, 3.3). With the extreme white point (400, 100, 200) and
+    // D = 0.5 the 3.2 rule gives qU = 157.62; the mid sample (max RGBc =
+    // 153.81) exercises the plain-hyperbolic middle branch above 150, the
+    // ext sample crosses into the tangent extension above qU, and the dark
+    // sample takes the linear extension below qL = 0.26 in all three
+    // channels, and the neg sample drives Gc = -0.49 below -qL, pinning the
+    // linear branch with a negative argument (Eq. 3.3 writes this branch as
+    // "q < qL" with no lower bound). Values are from the verified Python
+    // reference; the mid row has been independently confirmed by three
+    // third-party implementations.
+    static const struct {
+        cmsFloat64Number XYZ[3];
+        cmsFloat64Number J, C, h, H, Q, M, s;
+    } Pins[] = {
+        { { 345.00, 120.00, 125.00 }, 111.30642339, 26.73870250, 56.99257462, 49.41656507, 223.39010292, 23.38260177, 32.35299216 },
+        { { 355.00, 120.00, 100.00 }, 111.01900851, 44.47900165, 43.71752968, 30.83167311, 223.10149811, 38.89623226, 41.75442661 },
+        { {   0.52,   0.10,   0.22 },   1.31992085, 75.96938793, 355.98132026, 376.57368010, 24.32639523, 66.43411156, 165.25579071 },
+        { {  77.50,  15.68,   6.30 },  22.5338835721, 636.3739190855, 358.9917451779, 379.2913386202, 100.5129078528, 556.4996255255, 235.2997791377 }
+    };
+
+    cmsViewingConditions vc;
+    cmsHANDLE hMod;
+    cmsCIEXYZ XYZ;
+    cmsCIECAM16Appearance appearance;
+    cmsUInt32Number i;
+    cmsInt32Number rc = 1;
+    char Label[32];
+
+    vc.whitePoint.X = 400.0;
+    vc.whitePoint.Y = 100.0;
+    vc.whitePoint.Z = 200.0;
+    vc.Yb = 20.0;
+    vc.La = 40.0;
+    vc.surround = AVG_SURROUND;
+    vc.D_value = 0.5;
+
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) return 0;
+
+    for (i = 0; i < sizeof(Pins) / sizeof(Pins[0]); i++) {
+
+        XYZ.X = Pins[i].XYZ[0];
+        XYZ.Y = Pins[i].XYZ[1];
+        XYZ.Z = Pins[i].XYZ[2];
+
+        cmsCIECAM16ForwardEx(hMod, &XYZ, &appearance);
+
+        sprintf(Label, "J[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].J, appearance.J, 0.001)) rc = 0;
+        sprintf(Label, "C[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].C, appearance.C, 0.001)) rc = 0;
+        sprintf(Label, "h[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].h, appearance.h, 0.001)) rc = 0;
+        sprintf(Label, "H[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].H, appearance.H, 0.001)) rc = 0;
+        sprintf(Label, "Q[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].Q, appearance.Q, 0.001)) rc = 0;
+        sprintf(Label, "M[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].M, appearance.M, 0.001)) rc = 0;
+        sprintf(Label, "s[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].s, appearance.s, 0.001)) rc = 0;
+    }
+
+    cmsCIECAM16Done(hMod);
+
+    return rc;
+}
+
 static
 cmsInt32Number CheckCIECAM16Reverse(void)
 {
@@ -10309,6 +10441,8 @@ int main(int argc, char* argv[])
     Check("CIECAM16 forward", CheckCIECAM16Forward);
     Check("CIECAM16 reverse", CheckCIECAM16Reverse);
     Check("CIECAM16 round-trip", CheckCIECAM16Roundtrip);
+    Check("CIECAM16 hue quadrature pins", CheckCIECAM16HueQuadrature);
+    Check("CIECAM16 compression branches", CheckCIECAM16CompressionBranches);
     Check("Two-step CAT16", CheckCAT16TwoStep);
     Check("Two-step CAT16 with D override", CheckCIECAM16CAT16Ex);
     Check("CIECAM16 input validation", CheckCIECAM16InputValidation);
