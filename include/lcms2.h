@@ -1244,7 +1244,20 @@ typedef struct {
 
     } cmsCIECAM16Appearance;
 
-// Yb, La and whitePoint.Y must all be > 0, otherwise cmsCIECAM16Init fails and returns NULL.
+// Yb, La and whitePoint.Y must all be finite and > 0, and D_value must be
+// D_CALCULATE or a finite value in [0, 1]; otherwise cmsCIECAM16Init fails,
+// signals cmsERROR_RANGE and returns NULL (note this diverges from
+// cmsCIECAM02Init, which performs no domain validation and never fails).
+//
+// Domain behavior of the transforms:
+// - Forward on out-of-domain input (e.g. negative XYZ tristimulus) silently
+//   produces NaN correlates; s is reported as 0 whenever Q <= 0 or Q is NaN,
+//   which can mask a NaN in J/C. Pure black (X=Y=Z=0) is special-cased to
+//   all-zero output.
+// - Reverse with J <= 0 returns black; reverse with C < 0 signals
+//   cmsERROR_RANGE and returns black.
+// - The D_RGB adaptation scaling (Eq. 5.4) uses the literal 100, not
+//   whitePoint.Y (Gao et al. 2020).
 CMSAPI cmsHANDLE         CMSEXPORT cmsCIECAM16Init(cmsContext ContextID, const cmsViewingConditions* pVC);
 CMSAPI void              CMSEXPORT cmsCIECAM16Done(cmsHANDLE hModel);
 CMSAPI void              CMSEXPORT cmsCIECAM16Forward(cmsHANDLE hModel, const cmsCIEXYZ* pIn, cmsJCh* pOut);
@@ -1256,9 +1269,23 @@ CMSAPI void              CMSEXPORT cmsCIECAM16ReverseEx(cmsHANDLE hModel, const 
 // Note: a single surround applies to both source and destination (F is the
 // same at both ends); the general Annex A case with different surrounds
 // is not exposed by this API.
+// D is derived from La at both ends (Eq. 4.3, clamped to [0, 1]); under
+// partial adaptation (D < 1) the source white does NOT map exactly onto the
+// destination white. Use cmsCAT16Ex when the degree of adaptation must be
+// forced (e.g. D = 1 for complete adaptation in profile building).
 // Returns FALSE if either white point is degenerate (near-zero CAT16 response).
 CMSAPI cmsBool           CMSEXPORT cmsCAT16(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc,
                                                                             const cmsCIEXYZ* pWhiteDst, cmsFloat64Number LaDst,
+                                                                            cmsUInt32Number surround,
+                                                                            const cmsCIEXYZ* pIn, cmsCIEXYZ* pOut);
+
+// cmsCAT16 with per-end degree of adaptation override. Dsrc/Ddst take
+// D_CALCULATE (derive from the corresponding La per Eq. 4.3) or an explicit
+// finite value in [0, 1]. La is only used at the ends where D is
+// D_CALCULATE; surround only affects those same ends.
+// Returns FALSE on invalid La/D or degenerate white point.
+CMSAPI cmsBool           CMSEXPORT cmsCAT16Ex(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc, cmsFloat64Number Dsrc,
+                                                                            const cmsCIEXYZ* pWhiteDst, cmsFloat64Number LaDst, cmsFloat64Number Ddst,
                                                                             cmsUInt32Number surround,
                                                                             const cmsCIEXYZ* pIn, cmsCIEXYZ* pOut);
 

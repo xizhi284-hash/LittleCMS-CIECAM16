@@ -8983,6 +8983,138 @@ cmsInt32Number CheckCIECAM16Forward(void)
     return rc;
 }
 
+
+static
+cmsInt32Number CheckCIECAM16HueQuadrature(void)
+{
+    // Hue quadrature boundary pins (Eq. 5.26, Table 3). The XYZ values are
+    // constants generated from the verified Python reference (J=50, C=30 at
+    // each h), so every branch and the mod-400 seam at h = 20.14 is
+    // exercised: colour-science has known defects exactly at these points
+    // (anchor boundary bug and a non-spec wrap variant deviating 5.69 at
+    // h = 0).
+    static const struct {
+        cmsFloat64Number XYZ[3];
+        cmsFloat64Number H;
+    } Pins[] = {
+        { { 31.3801106687, 26.0174683631, 28.6021756908 }, 380.2135184712 },  // h = 0 wrap seam
+        { { 31.1715702896, 26.0477163917, 21.1594443626 }, 399.9989479597 },  // h = 20.139 (0.001 left of the 20.14 anchor), H → 400 seam
+        { { 31.1715197249, 26.0477269309, 21.1587711131 },   0.0012522401 },  // h = 20.141 (0.001 right of the 20.14 anchor), H wraps to 0
+        { { 26.0212284345, 27.1772807143, 10.6511679595 },  99.9999977918 },  // h = 90 anchor
+        { { 21.3800710632, 28.2503550119, 24.8594628998 }, 199.9999999584 },  // h = 164.25 anchor
+        { { 24.5288704251, 27.7000859541, 46.4754891882 }, 299.9999978344 },  // h = 237.53 anchor
+        { { 29.1340305594, 26.6439216494, 48.0297136246 }, 334.1964078269 }   // h = 300, wrap segment interior (e4)
+    };
+
+    cmsViewingConditions vc;
+    cmsHANDLE hMod;
+    cmsCIEXYZ XYZ;
+    cmsCIECAM16Appearance appearance;
+    cmsUInt32Number i;
+    cmsInt32Number rc = 1;
+    char Label[32];
+
+    vc.whitePoint.X = 95.047;
+    vc.whitePoint.Y = 100.00;
+    vc.whitePoint.Z = 108.883;
+    vc.Yb = 16.0;
+    vc.La = 40.0;
+    vc.surround = AVG_SURROUND;
+    vc.D_value = D_CALCULATE;
+
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) return 0;
+
+    for (i = 0; i < sizeof(Pins) / sizeof(Pins[0]); i++) {
+
+        XYZ.X = Pins[i].XYZ[0];
+        XYZ.Y = Pins[i].XYZ[1];
+        XYZ.Z = Pins[i].XYZ[2];
+
+        cmsCIECAM16ForwardEx(hMod, &XYZ, &appearance);
+
+        sprintf(Label, "H quad[%u]", i);
+
+        if (!IsGoodVal(Label, Pins[i].H, appearance.H, 0.001)) rc = 0;
+    }
+
+    cmsCIECAM16Done(hMod);
+
+    return rc;
+}
+
+static
+cmsInt32Number CheckCIECAM16CompressionBranches(void)
+{
+    // Pins for the three branches of the modified hyperbolic compression
+    // (Eqs. 3.2, 3.3). With the extreme white point (400, 100, 200) and
+    // D = 0.5 the 3.2 rule gives qU = 157.62; the mid sample (max RGBc =
+    // 153.81) exercises the plain-hyperbolic middle branch above 150, the
+    // ext sample crosses into the tangent extension above qU, and the dark
+    // sample takes the linear extension below qL = 0.26 in all three
+    // channels, and the neg sample drives Gc = -0.49 below -qL, pinning the
+    // linear branch with a negative argument (Eq. 3.3 writes this branch as
+    // "q < qL" with no lower bound). Values are from the verified Python
+    // reference; the mid row has been independently confirmed by three
+    // third-party implementations.
+    static const struct {
+        cmsFloat64Number XYZ[3];
+        cmsFloat64Number J, C, h, H, Q, M, s;
+    } Pins[] = {
+        { { 345.00, 120.00, 125.00 }, 111.30642339, 26.73870250, 56.99257462, 49.41656507, 223.39010292, 23.38260177, 32.35299216 },
+        { { 355.00, 120.00, 100.00 }, 111.01900851, 44.47900165, 43.71752968, 30.83167311, 223.10149811, 38.89623226, 41.75442661 },
+        { {   0.52,   0.10,   0.22 },   1.31992085, 75.96938793, 355.98132026, 376.57368010, 24.32639523, 66.43411156, 165.25579071 },
+        { {  77.50,  15.68,   6.30 },  22.5338835721, 636.3739190855, 358.9917451779, 379.2913386202, 100.5129078528, 556.4996255255, 235.2997791377 }
+    };
+
+    cmsViewingConditions vc;
+    cmsHANDLE hMod;
+    cmsCIEXYZ XYZ;
+    cmsCIECAM16Appearance appearance;
+    cmsUInt32Number i;
+    cmsInt32Number rc = 1;
+    char Label[32];
+
+    vc.whitePoint.X = 400.0;
+    vc.whitePoint.Y = 100.0;
+    vc.whitePoint.Z = 200.0;
+    vc.Yb = 20.0;
+    vc.La = 40.0;
+    vc.surround = AVG_SURROUND;
+    vc.D_value = 0.5;
+
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) return 0;
+
+    for (i = 0; i < sizeof(Pins) / sizeof(Pins[0]); i++) {
+
+        XYZ.X = Pins[i].XYZ[0];
+        XYZ.Y = Pins[i].XYZ[1];
+        XYZ.Z = Pins[i].XYZ[2];
+
+        cmsCIECAM16ForwardEx(hMod, &XYZ, &appearance);
+
+        sprintf(Label, "J[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].J, appearance.J, 0.001)) rc = 0;
+        sprintf(Label, "C[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].C, appearance.C, 0.001)) rc = 0;
+        sprintf(Label, "h[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].h, appearance.h, 0.001)) rc = 0;
+        sprintf(Label, "H[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].H, appearance.H, 0.001)) rc = 0;
+        sprintf(Label, "Q[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].Q, appearance.Q, 0.001)) rc = 0;
+        sprintf(Label, "M[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].M, appearance.M, 0.001)) rc = 0;
+        sprintf(Label, "s[%u]", i);
+        if (!IsGoodVal(Label, Pins[i].s, appearance.s, 0.001)) rc = 0;
+    }
+
+    cmsCIECAM16Done(hMod);
+
+    return rc;
+}
+
 static
 cmsInt32Number CheckCIECAM16Reverse(void)
 {
@@ -9129,6 +9261,119 @@ cmsInt32Number CheckCAT16TwoStep(void)
 }
 
 static
+cmsInt32Number CheckCIECAM16CAT16Ex(void)
+{
+    cmsCIEXYZ whiteSrc, whiteDst, in, out, outRef;
+    cmsInt32Number rc = 1;
+
+    whiteSrc.X = 109.850;
+    whiteSrc.Y = 100.0;
+    whiteSrc.Z =  35.585;
+
+    whiteDst.X =  96.422;
+    whiteDst.Y = 100.0;
+    whiteDst.Z =  82.521;
+
+    in.X = 48.900;
+    in.Y = 43.620;
+    in.Z =  6.250;
+
+    // Forced complete adaptation: the source white must map onto the
+    // destination white (profile building semantics, e.g. dcamprof).
+    // Tolerance floor ~1e-7: the CAT16 matrix and its inverse as published
+    // (6 and 8 decimals) are not exact inverses of each other
+    if (!cmsCAT16Ex(&whiteSrc, 20.0, 1.0, &whiteDst, 20.0, 1.0, AVG_SURROUND, &whiteSrc, &out)) return 0;
+
+    if (!IsGoodVal("X (D=1, white)", whiteDst.X, out.X, 1e-6)) rc = 0;
+    if (!IsGoodVal("Y (D=1, white)", whiteDst.Y, out.Y, 1e-6)) rc = 0;
+    if (!IsGoodVal("Z (D=1, white)", whiteDst.Z, out.Z, 1e-6)) rc = 0;
+
+    // D_CALCULATE at both ends must reproduce cmsCAT16 exactly
+    if (!cmsCAT16(&whiteSrc, 100.0, &whiteDst, 200.0, AVG_SURROUND, &in, &outRef)) return 0;
+    if (!cmsCAT16Ex(&whiteSrc, 100.0, D_CALCULATE, &whiteDst, 200.0, D_CALCULATE, AVG_SURROUND, &in, &out)) return 0;
+
+    if (!IsGoodVal("X (D_CALCULATE == cmsCAT16)", outRef.X, out.X, 0.0)) rc = 0;
+    if (!IsGoodVal("Y (D_CALCULATE == cmsCAT16)", outRef.Y, out.Y, 0.0)) rc = 0;
+    if (!IsGoodVal("Z (D_CALCULATE == cmsCAT16)", outRef.Z, out.Z, 0.0)) rc = 0;
+
+    // Known-answer vector, mixed ends: explicit Dsrc = 0.7 (LaSrc ignored),
+    // Ddst derived from LaDst = 200. Expected values computed per the
+    // CIE 248:2022 Annex A two-step procedure (Eqs. A.1 - A.16)
+    {
+        cmsCIEXYZ d65;
+        d65.X = 95.047;
+        d65.Y = 100.0;
+        d65.Z = 108.883;
+
+        if (!cmsCAT16Ex(&whiteSrc, 0.0, 0.7, &d65, 200.0, D_CALCULATE, AVG_SURROUND, &in, &out)) return 0;
+
+        if (!IsGoodVal("X (mixed D)", 41.8671352553, out.X, 1e-9)) rc = 0;
+        if (!IsGoodVal("Y (mixed D)", 43.6645793200, out.Y, 1e-9)) rc = 0;
+        if (!IsGoodVal("Z (mixed D)", 17.0436367924, out.Z, 1e-9)) rc = 0;
+    }
+
+    // La is ignored at the ends where D is explicit, so a bogus La
+    // must not affect the result nor cause a failure
+    if (!cmsCAT16Ex(&whiteSrc, 0.0, 1.0, &whiteDst, -1.0, 1.0, AVG_SURROUND, &whiteSrc, &out)) {
+        Fail("explicit D should not require a valid La");
+        rc = 0;
+    }
+    else {
+        if (!IsGoodVal("X (La ignored)", whiteDst.X, out.X, 1e-6)) rc = 0;
+        if (!IsGoodVal("Y (La ignored)", whiteDst.Y, out.Y, 1e-6)) rc = 0;
+        if (!IsGoodVal("Z (La ignored)", whiteDst.Z, out.Z, 1e-6)) rc = 0;
+    }
+
+    // Invalid inputs must be rejected. These signal errors on purpose,
+    // silence the logger meanwhile
+    cmsSetLogErrorHandler(NULL);
+
+    // Explicit D outside [0, 1] or NaN
+    if (cmsCAT16Ex(&whiteSrc, 20.0, 2.0, &whiteDst, 20.0, 1.0, AVG_SURROUND, &in, &out)) {
+        Fail("Dsrc = 2 not rejected"); rc = 0;
+    }
+    if (cmsCAT16Ex(&whiteSrc, 20.0, 1.0, &whiteDst, 20.0, -0.5, AVG_SURROUND, &in, &out)) {
+        Fail("Ddst < 0 not rejected"); rc = 0;
+    }
+    if (cmsCAT16Ex(&whiteSrc, 20.0, (cmsFloat64Number) NAN, &whiteDst, 20.0, 1.0, AVG_SURROUND, &in, &out)) {
+        Fail("Dsrc = NaN not rejected"); rc = 0;
+    }
+
+    // Invalid La at an end where D is derived from it
+    if (cmsCAT16Ex(&whiteSrc, (cmsFloat64Number) NAN, D_CALCULATE, &whiteDst, 200.0, D_CALCULATE, AVG_SURROUND, &in, &out)) {
+        Fail("LaSrc = NaN not rejected"); rc = 0;
+    }
+    if (cmsCAT16Ex(&whiteSrc, 0.0, D_CALCULATE, &whiteDst, 200.0, D_CALCULATE, AVG_SURROUND, &in, &out)) {
+        Fail("LaSrc = 0 not rejected"); rc = 0;
+    }
+    if (cmsCAT16Ex(&whiteSrc, (cmsFloat64Number) INFINITY, D_CALCULATE, &whiteDst, 200.0, D_CALCULATE, AVG_SURROUND, &in, &out)) {
+        Fail("LaSrc = +Inf not rejected"); rc = 0;
+    }
+
+    // NaN white point components slip past fabs() < tol comparisons
+    {
+        cmsCIEXYZ nanWhite = whiteSrc;
+        nanWhite.X = (cmsFloat64Number) NAN;
+        if (cmsCAT16Ex(&nanWhite, 20.0, 1.0, &whiteDst, 20.0, 1.0, AVG_SURROUND, &in, &out)) {
+            Fail("NaN white point not rejected"); rc = 0;
+        }
+    }
+
+    // +Inf white point components pass fabs() >= tol comparisons
+    {
+        cmsCIEXYZ infWhite = whiteSrc;
+        infWhite.Z = (cmsFloat64Number) INFINITY;
+        if (cmsCAT16Ex(&infWhite, 20.0, 1.0, &whiteDst, 20.0, 1.0, AVG_SURROUND, &in, &out)) {
+            Fail("+Inf white point not rejected"); rc = 0;
+        }
+    }
+
+    ResetFatalError();
+
+    return rc;
+}
+
+static
 cmsInt32Number CheckCIECAM16InputValidation(void)
 {
     cmsViewingConditions vc;
@@ -9166,6 +9411,52 @@ cmsInt32Number CheckCIECAM16InputValidation(void)
     vc.La = -5.0;
     if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("La < 0 not rejected"); rc = 0; }
     vc.La = 40.0;
+
+    // NaN slips past <= 0 comparisons; it must be rejected as well
+    vc.Yb = (cmsFloat64Number) NAN;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yb = NaN not rejected"); rc = 0; }
+    vc.Yb = 16.0;
+
+    vc.whitePoint.Y = (cmsFloat64Number) NAN;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yw = NaN not rejected"); rc = 0; }
+    vc.whitePoint.Y = 100.0;
+
+    vc.La = (cmsFloat64Number) NAN;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("La = NaN not rejected"); rc = 0; }
+    vc.La = 40.0;
+
+    // +Inf passes !(x > 0) comparisons; it must be rejected as well
+    vc.Yb = (cmsFloat64Number) INFINITY;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yb = +Inf not rejected"); rc = 0; }
+    vc.Yb = 16.0;
+
+    vc.whitePoint.Y = (cmsFloat64Number) INFINITY;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("Yw = +Inf not rejected"); rc = 0; }
+    vc.whitePoint.Y = 100.0;
+
+    vc.La = (cmsFloat64Number) INFINITY;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("La = +Inf not rejected"); rc = 0; }
+    vc.La = 40.0;
+
+    // An explicit degree of adaptation must be finite and within [0, 1]
+    vc.D_value = (cmsFloat64Number) NAN;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("D = NaN not rejected"); rc = 0; }
+    vc.D_value = -0.5;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("D < 0 not rejected"); rc = 0; }
+    vc.D_value = 1.5;
+    if (cmsCIECAM16Init(NULL, &vc) != NULL) { Fail("D > 1 not rejected"); rc = 0; }
+
+    // Boundary and in-range explicit values are valid
+    vc.D_value = 0.0;
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) { Fail("D = 0 rejected"); rc = 0; } else cmsCIECAM16Done(hMod);
+    vc.D_value = 1.0;
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) { Fail("D = 1 rejected"); rc = 0; } else cmsCIECAM16Done(hMod);
+    vc.D_value = 0.7;
+    hMod = cmsCIECAM16Init(NULL, &vc);
+    if (hMod == NULL) { Fail("D = 0.7 rejected"); rc = 0; } else cmsCIECAM16Done(hMod);
+    vc.D_value = D_CALCULATE;
 
     ResetFatalError();
 
@@ -10150,7 +10441,10 @@ int main(int argc, char* argv[])
     Check("CIECAM16 forward", CheckCIECAM16Forward);
     Check("CIECAM16 reverse", CheckCIECAM16Reverse);
     Check("CIECAM16 round-trip", CheckCIECAM16Roundtrip);
+    Check("CIECAM16 hue quadrature pins", CheckCIECAM16HueQuadrature);
+    Check("CIECAM16 compression branches", CheckCIECAM16CompressionBranches);
     Check("Two-step CAT16", CheckCAT16TwoStep);
+    Check("Two-step CAT16 with D override", CheckCIECAM16CAT16Ex);
     Check("CIECAM16 input validation", CheckCIECAM16InputValidation);
     }
 

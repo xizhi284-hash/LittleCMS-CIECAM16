@@ -389,25 +389,36 @@ cmsHANDLE  CMSEXPORT cmsCIECAM16Init(cmsContext ContextID, const cmsViewingCondi
     _cmsAssert(pVC != NULL);
 
     // Yb == 0 is an error condition (CIE 248:2022, Clause 4):
-    // the model does not apply to unrelated colours
-    if (pVC -> Yb <= 0.0) {
+    // the model does not apply to unrelated colours.
+    // The !(x > 0) form also rejects NaN, which slips past <= checks;
+    // isinf rejects +inf, which would pass it and produce NaN downstream
+    if (isinf(pVC -> Yb) || !(pVC -> Yb > 0.0)) {
         cmsSignalError(ContextID, cmsERROR_RANGE,
-                       "cmsCIECAM16Init: Yb must be > 0 (unrelated colors not supported)");
+                       "cmsCIECAM16Init: Yb must be finite and > 0 (unrelated colors not supported)");
         return NULL;
     }
 
     // A null white point makes n, D_RGB and everything downstream NaN
-    if (pVC -> whitePoint.Y <= 0.0) {
+    if (isinf(pVC -> whitePoint.Y) || !(pVC -> whitePoint.Y > 0.0)) {
         cmsSignalError(ContextID, cmsERROR_RANGE,
-                       "cmsCIECAM16Init: white point Y must be > 0");
+                       "cmsCIECAM16Init: white point Y must be finite and > 0");
         return NULL;
     }
 
     // LA <= 0 makes Eqs. 5.5/5.6 undefined (negative base power, division
     // by zero); the model is specified for photopic levels (Clause 1.3)
-    if (pVC -> La <= 0.0) {
+    if (isinf(pVC -> La) || !(pVC -> La > 0.0)) {
         cmsSignalError(ContextID, cmsERROR_RANGE,
-                       "cmsCIECAM16Init: La must be > 0");
+                       "cmsCIECAM16Init: La must be finite and > 0");
+        return NULL;
+    }
+
+    // An explicit degree of adaptation outside [0, 1] is outside the model
+    // domain (Annex A constrains D to that range); NaN fails both
+    // comparisons and is rejected by the same test
+    if (pVC -> D_value != D_CALCULATE && !(pVC -> D_value >= 0.0 && pVC -> D_value <= 1.0)) {
+        cmsSignalError(ContextID, cmsERROR_RANGE,
+                       "cmsCIECAM16Init: D_value must be D_CALCULATE or in the range [0, 1]");
         return NULL;
     }
 
@@ -608,13 +619,19 @@ void CMSEXPORT cmsCIECAM16Reverse(cmsHANDLE hModel, const cmsJCh* pIn, cmsCIEXYZ
 // Two-step CAT16 chromatic adaptation transform (CIE 248:2022, Annex A).
 // Computes the corresponding colour under a reference illuminant for a
 // sample seen under a test illuminant.
-cmsBool CMSEXPORT cmsCAT16(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc,
-                           const cmsCIEXYZ* pWhiteDst, cmsFloat64Number LaDst,
-                           cmsUInt32Number surround,
-                           const cmsCIEXYZ* pIn, cmsCIEXYZ* pOut)
+//
+// cmsCAT16Ex allows the degree of adaptation to be overridden at either end:
+// pass D_CALCULATE to derive D from the corresponding La (Eq. 4.3, clamped
+// to [0, 1] per Annex A, step 2), or an explicit value in [0, 1] to force it
+// (e.g. 1.0 for complete adaptation, as required by profile building tools).
+// La is only used at the ends where D is D_CALCULATE.
+cmsBool CMSEXPORT cmsCAT16Ex(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc, cmsFloat64Number Dsrc,
+                             const cmsCIEXYZ* pWhiteDst, cmsFloat64Number LaDst, cmsFloat64Number Ddst,
+                             cmsUInt32Number surround,
+                             const cmsCIEXYZ* pIn, cmsCIEXYZ* pOut)
 {
     CAM16COLOR clr, whiteSrc, whiteDst;
-    cmsFloat64Number F, Dsrc, Ddst;
+    cmsFloat64Number F;
     cmsFloat64Number Dsrc_RGB[3], Ddst_RGB[3];
     cmsUInt32Number i;
 
@@ -623,7 +640,35 @@ cmsBool CMSEXPORT cmsCAT16(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc,
     _cmsAssert(pIn != NULL);
     _cmsAssert(pOut != NULL);
 
-    // Only the surround factor F is needed (Table 2)
+    // La is only meaningful (and therefore only validated) at the ends
+    // where D is derived from it; the !(x > 0) form also rejects NaN,
+    // isinf rejects +inf
+    if (Dsrc == D_CALCULATE && (isinf(LaSrc) || !(LaSrc > 0.0))) {
+        cmsSignalError(NULL, cmsERROR_RANGE,
+                       "cmsCAT16Ex: LaSrc must be finite and > 0 when Dsrc is D_CALCULATE");
+        return FALSE;
+    }
+    if (Ddst == D_CALCULATE && (isinf(LaDst) || !(LaDst > 0.0))) {
+        cmsSignalError(NULL, cmsERROR_RANGE,
+                       "cmsCAT16Ex: LaDst must be finite and > 0 when Ddst is D_CALCULATE");
+        return FALSE;
+    }
+
+    // Explicit degrees of adaptation are constrained to [0, 1] (Annex A,
+    // step 2); NaN fails both comparisons and is rejected by the same test
+    if (Dsrc != D_CALCULATE && !(Dsrc >= 0.0 && Dsrc <= 1.0)) {
+        cmsSignalError(NULL, cmsERROR_RANGE,
+                       "cmsCAT16Ex: Dsrc must be D_CALCULATE or in the range [0, 1]");
+        return FALSE;
+    }
+    if (Ddst != D_CALCULATE && !(Ddst >= 0.0 && Ddst <= 1.0)) {
+        cmsSignalError(NULL, cmsERROR_RANGE,
+                       "cmsCAT16Ex: Ddst must be D_CALCULATE or in the range [0, 1]");
+        return FALSE;
+    }
+
+    // Only the surround factor F is needed (Table 2), and only to derive D
+    // from La at the ends where D is D_CALCULATE
     switch (surround) {
 
     case CUTSHEET_SURROUND:   // lcms extension, not defined by CIE 248:2022
@@ -661,31 +706,38 @@ cmsBool CMSEXPORT cmsCAT16(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc,
 
     // A degenerate white point would make the D_RGB ratios below
     // meaningless (division by ~zero). Same check as the one in
-    // ComputeChromaticAdaptation for the Bradford transform
+    // ComputeChromaticAdaptation for the Bradford transform; the
+    // !(x >= tol) form also rejects NaN components, isinf rejects inf
     for (i = 0; i < 3; i++) {
-        if ((fabs(whiteSrc.RGB[i]) < MATRIX_DET_TOLERANCE) ||
-            (fabs(whiteDst.RGB[i]) < MATRIX_DET_TOLERANCE)) {
+        if (isinf(whiteSrc.RGB[i]) || isinf(whiteDst.RGB[i]) ||
+            !(fabs(whiteSrc.RGB[i]) >= MATRIX_DET_TOLERANCE) ||
+            !(fabs(whiteDst.RGB[i]) >= MATRIX_DET_TOLERANCE)) {
             cmsSignalError(NULL, cmsERROR_RANGE,
-                           "cmsCAT16: degenerate white point");
+                           "cmsCAT16Ex: degenerate or non-finite white point");
             return FALSE;
         }
     }
 
     // Annex A, step 2 (Eq. 4.3), D constrained to the range [0, 1]
-    Dsrc = F * (1.0 - ((1.0 / 3.6) * exp((-LaSrc - 42.0) / 92.0)));
-    Ddst = F * (1.0 - ((1.0 / 3.6) * exp((-LaDst - 42.0) / 92.0)));
+    if (Dsrc == D_CALCULATE) {
+        Dsrc = F * (1.0 - ((1.0 / 3.6) * exp((-LaSrc - 42.0) / 92.0)));
 
-    if (Dsrc > 1.0) {
-        Dsrc = 1.0;
+        if (Dsrc > 1.0) {
+            Dsrc = 1.0;
+        }
+        else if (Dsrc < 0.0) {
+            Dsrc = 0.0;
+        }
     }
-    else if (Dsrc < 0.0) {
-        Dsrc = 0.0;
-    }
-    if (Ddst > 1.0) {
-        Ddst = 1.0;
-    }
-    else if (Ddst < 0.0) {
-        Ddst = 0.0;
+    if (Ddst == D_CALCULATE) {
+        Ddst = F * (1.0 - ((1.0 / 3.6) * exp((-LaDst - 42.0) / 92.0)));
+
+        if (Ddst > 1.0) {
+            Ddst = 1.0;
+        }
+        else if (Ddst < 0.0) {
+            Ddst = 0.0;
+        }
     }
 
     // Annex A, steps 3 and 4 (Eqs. A.5 - A.14)
@@ -706,4 +758,19 @@ cmsBool CMSEXPORT cmsCAT16(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc,
     pOut -> Z = clr.XYZ[2];
 
     return TRUE;
+}
+
+
+// Strict Annex A variant: D is derived from La at both ends. Note that under
+// partial adaptation (D < 1) the source white does NOT map exactly onto the
+// destination white; use cmsCAT16Ex with explicit D (e.g. 1.0) when complete
+// adaptation is required.
+cmsBool CMSEXPORT cmsCAT16(const cmsCIEXYZ* pWhiteSrc, cmsFloat64Number LaSrc,
+                           const cmsCIEXYZ* pWhiteDst, cmsFloat64Number LaDst,
+                           cmsUInt32Number surround,
+                           const cmsCIEXYZ* pIn, cmsCIEXYZ* pOut)
+{
+    return cmsCAT16Ex(pWhiteSrc, LaSrc, D_CALCULATE,
+                      pWhiteDst, LaDst, D_CALCULATE,
+                      surround, pIn, pOut);
 }
