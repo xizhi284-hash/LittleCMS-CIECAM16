@@ -1,9 +1,14 @@
 cmake_minimum_required(VERSION 3.16...3.29)
 
 project(lcms2_ciecam16
-  VERSION 2.19-c16.1
+  VERSION 2.19
   LANGUAGES C
 )
+
+# Fork branding: full human-facing version string. project(VERSION) itself must
+# stay numeric (CMake rejects "2.19-c16.1"); it also feeds the .pc Version field
+# and the CMake config-version file, which expect the upstream-style number.
+set(LCMS2_CIECAM16_FULL_VERSION "${PROJECT_VERSION}-c16.1")
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
