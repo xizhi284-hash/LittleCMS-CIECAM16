@@ -27,7 +27,12 @@ function(_lcms2_add_plugin lib_name)
     target_compile_definitions(${lib_name} PRIVATE CMS_DLL_BUILD)
   endif()
 
+  # Installed plugin names are prefixed lcms2_ciecam16_ so they can coexist
+  # with upstream lcms2 plugin builds in the same prefix.
+  string(REGEX REPLACE "^lcms2_" "lcms2_ciecam16_" _plg_output_name "${lib_name}")
+
   set_target_properties(${lib_name} PROPERTIES
+    OUTPUT_NAME "${_plg_output_name}"
     VERSION "${PROJECT_VERSION}.0"
     SOVERSION "2"
   )

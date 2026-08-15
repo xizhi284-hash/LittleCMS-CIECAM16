@@ -9,6 +9,10 @@ function(_lcms2_add_tool exe_name)
 
   add_executable(${exe_name} ${TOOL_SOURCES})
 
+  # Installed tool names carry a -c16 suffix so this fork's tools can coexist
+  # with upstream lcms2 tools in the same prefix (e.g. transicc vs transicc-c16).
+  set_property(TARGET ${exe_name} PROPERTY OUTPUT_NAME "${exe_name}-c16")
+
   target_include_directories(${exe_name}
     PRIVATE
       "${PROJECT_SOURCE_DIR}/include"
@@ -49,21 +53,18 @@ function(lcms2_add_tools)
       "${PROJECT_SOURCE_DIR}/utils/transicc/transicc.c"
       ${_common_sources}
   )
-  set_property(TARGET transicc PROPERTY OUTPUT_NAME "transicc")
 
   _lcms2_add_tool(linkicc
     SOURCES
       "${PROJECT_SOURCE_DIR}/utils/linkicc/linkicc.c"
       ${_common_sources}
   )
-  set_property(TARGET linkicc PROPERTY OUTPUT_NAME "linkicc")
 
   _lcms2_add_tool(psicc
     SOURCES
       "${PROJECT_SOURCE_DIR}/utils/psicc/psicc.c"
       ${_common_sources}
   )
-  set_property(TARGET psicc PROPERTY OUTPUT_NAME "psicc")
 
   # Optional jpgicc (requires JPEG).
   if(LCMS2_BUILD_JPGICC)

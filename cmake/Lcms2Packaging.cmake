@@ -47,11 +47,17 @@ function(lcms2_setup_packaging)
   endif()
 
   # Manpages (installed regardless of whether the corresponding tool is built).
+  # Renamed to <tool>-c16.1 at install time to match the -c16 tool binaries and
+  # to coexist with upstream lcms2 manpages in the same prefix.
   if(DEFINED LCMS2_TOOL_MANPAGES)
-    install(
-      FILES ${LCMS2_TOOL_MANPAGES}
-      DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
-    )
+    foreach(_mp IN LISTS LCMS2_TOOL_MANPAGES)
+      get_filename_component(_mp_name "${_mp}" NAME_WE)
+      install(
+        FILES "${_mp}"
+        DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
+        RENAME "${_mp_name}-c16.1"
+      )
+    endforeach()
   endif()
 
   # CMake package config.
