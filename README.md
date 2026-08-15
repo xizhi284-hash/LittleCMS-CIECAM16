@@ -67,7 +67,9 @@ Useful options (all `ON` unless noted): `LCMS2_BUILD_SHARED`,
 The autotools, meson and MSVC project files differ from upstream only by the
 minimal addition of `cmscam16.c` (and the matching `.def` exports), to minimize
 merge friction. They still produce upstream-named `lcms2` artifacts — use CMake
-for anything you ship.
+for anything you ship. This means their installed layout is upstream's own
+(bare `include/` headers, `lcms2.pc`, `liblcms2`) and intentionally so: only
+the CMake build carries the independent `lcms2_ciecam16` identity.
 
 ## Using it from your project
 
