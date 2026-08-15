@@ -126,7 +126,22 @@ function(lcms2_setup_packaging)
     endif()
   endif()
 
-  set(prefix "${CMAKE_INSTALL_PREFIX}")
+  # Derive prefix from the .pc file's own location (${pcfiledir}) so the
+  # package stays usable when relocated via `cmake --install --prefix`.
+  # The .pc lands in <prefix>/<libdir>/pkgconfig, so climb one level per
+  # libdir component plus one for "pkgconfig" itself. An absolute
+  # CMAKE_INSTALL_LIBDIR has no fixed relation to the prefix; keep the
+  # configure-time prefix in that case.
+  if(IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
+    set(prefix "${CMAKE_INSTALL_PREFIX}")
+  else()
+    string(REPLACE "/" ";" _pc_libdir_parts "${CMAKE_INSTALL_LIBDIR}")
+    set(_pc_up "")
+    foreach(_pc_part IN LISTS _pc_libdir_parts)
+      string(APPEND _pc_up "/..")
+    endforeach()
+    set(prefix "\${pcfiledir}${_pc_up}/..")
+  endif()
   set(exec_prefix "\${prefix}")
   if(IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
     set(libdir "${CMAKE_INSTALL_LIBDIR}")
